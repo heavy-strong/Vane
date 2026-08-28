@@ -20,6 +20,18 @@ import {
 import { Message } from '@/lib/types';
 import { repairJson } from '@toolsycc/json-repair';
 
+const parsePartialToolArguments = (raw?: string) => {
+  const text = (raw ?? '').trim();
+  if (!text) return {};
+
+  try {
+    const parsed = parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 type OpenAIConfig = {
   apiKey: string;
   model: string;
@@ -110,7 +122,7 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
                 return {
                   name: tc.function.name,
                   id: tc.id,
-                  arguments: JSON.parse(tc.function.arguments),
+                  arguments: JSON.parse(tc.function.arguments || '{}'),
                 };
               }
             })
@@ -174,14 +186,17 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
                   id: tc.id!,
                   arguments: tc.function?.arguments || '',
                 };
-                recievedToolCalls.push(call);
-                return { ...call, arguments: parse(call.arguments || '{}') };
+                recievedToolCalls[tc.index] = call;
+                return {
+                  ...call,
+                  arguments: parsePartialToolArguments(call.arguments),
+                };
               } else {
                 const existingCall = recievedToolCalls[tc.index];
                 existingCall.arguments += tc.function?.arguments || '';
                 return {
                   ...existingCall,
-                  arguments: parse(existingCall.arguments),
+                  arguments: parsePartialToolArguments(existingCall.arguments),
                 };
               }
             }) || [],

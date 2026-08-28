@@ -35,7 +35,7 @@ export const GET = async (req: Request) => {
 
     const selectedTopic = websitesForTopic[topic];
 
-    let data = [];
+    let data: Awaited<ReturnType<typeof searchSearxng>>['results'] = [];
 
     if (mode === 'normal') {
       const seenUrls = new Set();
@@ -44,13 +44,20 @@ export const GET = async (req: Request) => {
         await Promise.all(
           selectedTopic.links.flatMap((link) =>
             selectedTopic.query.map(async (query) => {
-              return (
-                await searchSearxng(`site:${link} ${query}`, {
-                  engines: ['bing news'],
-                  pageno: 1,
-                  language: 'en',
-                })
-              ).results;
+              try {
+                return (
+                  await searchSearxng(`site:${link} ${query}`, {
+                    engines: ['bing news'],
+                    pageno: 1,
+                    language: 'en',
+                  })
+                ).results;
+              } catch (err) {
+                console.error(
+                  `Discover search failed for "${query}" on ${link}: ${err}`,
+                );
+                return [];
+              }
             }),
           ),
         )
@@ -64,16 +71,21 @@ export const GET = async (req: Request) => {
         })
         .sort(() => Math.random() - 0.5);
     } else {
-      data = (
-        await searchSearxng(
-          `site:${selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)]} ${selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)]}`,
-          {
-            engines: ['bing news'],
-            pageno: 1,
-            language: 'en',
-          },
-        )
-      ).results;
+      try {
+        data = (
+          await searchSearxng(
+            `site:${selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)]} ${selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)]}`,
+            {
+              engines: ['bing news'],
+              pageno: 1,
+              language: 'en',
+            },
+          )
+        ).results;
+      } catch (err) {
+        console.error(`Discover preview search failed: ${err}`);
+        data = [];
+      }
     }
 
     return Response.json(

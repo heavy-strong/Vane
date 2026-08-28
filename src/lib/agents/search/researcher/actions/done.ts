@@ -9,7 +9,14 @@ IT WILL BE AUTOMATICALLY TRIGGERED IF MAXIMUM ITERATIONS ARE REACHED SO IF YOU'R
 
 const doneAction: ResearchAction<any> = {
   name: 'done',
-  schema: z.object({}),
+  schema: z.object({
+    reason: z
+      .string()
+      .optional()
+      .describe(
+        'Brief reason why research is complete enough to answer the user.',
+      ),
+  }),
   getToolDescription: () =>
     'Only call this after __reasoning_preamble AND after any other needed tool calls when you truly have enough to answer. Do not call if information is still missing.',
   getDescription: () => actionDescription,

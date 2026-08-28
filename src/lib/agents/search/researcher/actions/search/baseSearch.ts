@@ -41,9 +41,15 @@ export const executeSearch = async (input: {
     const results: Chunk[] = [];
 
     const search = async (q: string) => {
-      const res = await searchSearxng(q, {
-        ...(input.searchConfig ? input.searchConfig : {}),
-      });
+      let res: Awaited<ReturnType<typeof searchSearxng>>;
+      try {
+        res = await searchSearxng(q, {
+          ...(input.searchConfig ? input.searchConfig : {}),
+        });
+      } catch (err) {
+        console.error(`Web search failed for query "${q}":`, err);
+        return;
+      }
 
       let resultChunks: Chunk[] = [];
 
@@ -176,9 +182,15 @@ export const executeSearch = async (input: {
     const searchResults: Chunk[] = [];
 
     const search = async (q: string) => {
-      const res = await searchSearxng(q, {
-        ...(input.searchConfig ? input.searchConfig : {}),
-      });
+      let res: Awaited<ReturnType<typeof searchSearxng>>;
+      try {
+        res = await searchSearxng(q, {
+          ...(input.searchConfig ? input.searchConfig : {}),
+        });
+      } catch (err) {
+        console.error(`Web search failed for query "${q}":`, err);
+        return;
+      }
 
       let resultChunks: Chunk[] = [];
 
