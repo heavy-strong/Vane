@@ -87,6 +87,17 @@ class ConfigManager {
         default: true,
         scope: 'client',
       },
+      {
+        name: 'New question shortcut',
+        key: 'newQuestionShortcut',
+        type: 'string',
+        required: false,
+        description:
+          'Keyboard shortcut for starting a new question. Use modifiers such as Ctrl, Alt, Shift, or Meta (for example, Ctrl+Alt+N).',
+        placeholder: 'Ctrl+Alt+N',
+        default: 'Ctrl+Alt+N',
+        scope: 'client',
+      },
     ],
     personalization: [
       {

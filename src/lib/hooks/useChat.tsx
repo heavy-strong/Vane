@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react';
 import crypto from 'crypto';
-import { useParams, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
 import { MinimalProvider } from '../models/types';
@@ -268,12 +268,13 @@ export const chatContext = createContext<ChatContext>({
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
-  const params: { chatId: string } = useParams();
+  const pathname = usePathname();
+  const routeChatId = pathname.match(/^\/c\/([^/]+)/)?.[1];
 
   const searchParams = useSearchParams();
   const initialMessage = searchParams.get('q');
 
-  const [chatId, setChatId] = useState<string | undefined>(params.chatId);
+  const [chatId, setChatId] = useState<string | undefined>(routeChatId);
   const [newChatCreated, setNewChatCreated] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -471,17 +472,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    if (params.chatId && params.chatId !== chatId) {
-      setChatId(params.chatId);
-      setMessages([]);
-      chatHistory.current = [];
-      setFiles([]);
-      setFileIds([]);
-      setIsMessagesLoaded(false);
-      setNotFound(false);
-      setNewChatCreated(false);
-    }
-  }, [params.chatId, chatId]);
+    setChatId(routeChatId);
+    setMessages([]);
+    chatHistory.current = [];
+    setFiles([]);
+    setFileIds([]);
+    setSources(['web']);
+    setIsMessagesLoaded(false);
+    setNotFound(false);
+    setNewChatCreated(false);
+  }, [pathname, routeChatId]);
 
   useEffect(() => {
     if (
