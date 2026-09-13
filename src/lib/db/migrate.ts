@@ -272,7 +272,25 @@ fs.readdirSync(migrationsFolder)
         // Execute each statement separately
         statements.forEach((stmt) => {
           if (stmt.trim()) {
-            db.exec(stmt);
+            try {
+              db.exec(stmt);
+            } catch (stmtErr: any) {
+              // Tolerate re-applying a statement whose effect already exists
+              // (e.g. the DB was migrated manually, or a previous run crashed
+              // after altering the schema but before recording the migration).
+              const message = String(stmtErr?.message || '');
+              const alreadyApplied =
+                /duplicate column name/i.test(message) ||
+                /already exists/i.test(message);
+
+              if (!alreadyApplied) {
+                throw stmtErr;
+              }
+
+              console.warn(
+                `Skipping statement in migration ${file} (already applied): ${message}`,
+              );
+            }
           }
         });
       }

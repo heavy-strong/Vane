@@ -3,6 +3,11 @@ import { Message } from '../ChatWindow';
 import { useState } from 'react';
 import { Section } from '@/lib/hooks/useChat';
 import { SourceBlock } from '@/lib/types';
+import {
+  formatMessageForCopy,
+  isDecodeCitationUrlsEnabled,
+  safeDecodeURI,
+} from '@/lib/utils/urlDecode';
 
 const Copy = ({
   section,
@@ -20,14 +25,19 @@ const Copy = ({
           (b) => b.type === 'source' && b.data.length > 0,
         ) as SourceBlock[];
 
-        const contentToCopy = `${initialMessage}${
+        const decodeCitationUrls = isDecodeCitationUrlsEnabled();
+
+        const formatUrl = (url: string) =>
+          decodeCitationUrls ? safeDecodeURI(url) : url;
+
+        const contentToCopy = `${formatMessageForCopy(initialMessage)}${
           sources.length > 0
             ? `\n\nCitations:\n${sources
                 .map((source) => source.data)
                 .flat()
                 .map(
                   (s, i) =>
-                    `[${i + 1}] ${s.metadata.url.startsWith('file_id://') ? s.metadata.fileName || 'Uploaded File' : s.metadata.url}`,
+                    `[${i + 1}] ${s.metadata.url.startsWith('file_id://') ? s.metadata.fileName || 'Uploaded File' : formatUrl(s.metadata.url)}`,
                 )
                 .join(`\n`)}`
             : ''

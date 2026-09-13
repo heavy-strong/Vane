@@ -88,6 +88,16 @@ class ConfigManager {
         scope: 'client',
       },
       {
+        name: 'Decode citation URLs',
+        key: 'decodeCitationUrls',
+        type: 'switch',
+        required: false,
+        description:
+          'Show citation URLs decoded (e.g. Korean characters instead of %EC%95%88...) when copying or viewing them.',
+        default: true,
+        scope: 'client',
+      },
+      {
         name: 'New question shortcut',
         key: 'newQuestionShortcut',
         type: 'string',
