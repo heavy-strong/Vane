@@ -168,6 +168,7 @@ class Researcher {
         researchBlockId: researchBlockId,
         fileIds: input.config.fileIds,
         mode: input.config.mode,
+        followUp: input.followUp,
       });
 
       actionOutput.push(...actionResults);

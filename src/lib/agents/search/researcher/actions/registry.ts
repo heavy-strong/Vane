@@ -1,7 +1,7 @@
 import { Tool, ToolCall } from '@/lib/models/types';
 import {
+  ActionExecutionConfig,
   ActionOutput,
-  AdditionalConfig,
   ClassifierOutput,
   ResearchAction,
   SearchAgentConfig,
@@ -64,11 +64,7 @@ class ActionRegistry {
   static async execute(
     name: string,
     params: any,
-    additionalConfig: AdditionalConfig & {
-      researchBlockId: string;
-      fileIds: string[];
-      mode: SearchAgentConfig['mode'];
-    },
+    additionalConfig: ActionExecutionConfig,
   ) {
     const action = this.actions.get(name);
 
@@ -81,11 +77,7 @@ class ActionRegistry {
 
   static async executeAll(
     actions: ToolCall[],
-    additionalConfig: AdditionalConfig & {
-      researchBlockId: string;
-      fileIds: string[];
-      mode: SearchAgentConfig['mode'];
-    },
+    additionalConfig: ActionExecutionConfig,
   ): Promise<ActionOutput[]> {
     const results: ActionOutput[] = [];
 

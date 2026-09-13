@@ -5,7 +5,7 @@ import { ConfigModelProvider } from '@/lib/config/types';
 
 type SaveConfigBody = {
   key: string;
-  value: string;
+  value: string | boolean | string[];
 };
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +49,8 @@ export const POST = async (req: NextRequest) => {
   try {
     const body: SaveConfigBody = await req.json();
 
-    if (!body.key || !body.value) {
+    /* `false` and `[]` are valid values (switches, engine lists) */
+    if (!body.key || body.value === undefined || body.value === null) {
       return Response.json(
         {
           message: 'Key and value are required.',

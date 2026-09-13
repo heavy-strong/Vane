@@ -43,12 +43,21 @@ type SwitchUIConfigField = BaseUIConfigField & {
   default?: boolean;
 };
 
+/* Multi-select of SearXNG engines. Options are fetched at runtime from the
+ * configured SearXNG instance and filtered by `category`. */
+type EnginesUIConfigField = BaseUIConfigField & {
+  type: 'engines';
+  category: string;
+  default?: string[];
+};
+
 type UIConfigField =
   | StringUIConfigField
   | SelectUIConfigField
   | PasswordUIConfigField
   | TextareaUIConfigField
-  | SwitchUIConfigField;
+  | SwitchUIConfigField
+  | EnginesUIConfigField;
 
 type ConfigModelProvider = {
   id: string;
@@ -108,4 +117,5 @@ export type {
   ConfigModelProvider,
   TextareaUIConfigField,
   SwitchUIConfigField,
+  EnginesUIConfigField,
 };

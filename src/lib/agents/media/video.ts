@@ -1,5 +1,6 @@
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { searchSearxng } from '@/lib/searxng';
+import { resolveSearchOptions } from '@/lib/searchEngines';
 import {
   videoSearchFewShots,
   videoSearchPrompt,
@@ -17,7 +18,9 @@ type VideoSearchResult = {
   img_src: string;
   url: string;
   title: string;
-  iframe_src: string;
+  /* Absent for engines without an embeddable player (e.g. Naver); the UI
+   * links out to `url` instead. */
+  iframe_src?: string;
 };
 
 const searchVideos = async (
@@ -43,22 +46,27 @@ const searchVideos = async (
     schema: schema,
   });
 
-  const searchRes = await searchSearxng(res.query, {
-    engines: ['youtube'],
-  });
+  const searchRes = await searchSearxng(
+    res.query,
+    await resolveSearchOptions(res.query, 'videos', input.query),
+  );
 
   const videos: VideoSearchResult[] = [];
 
   searchRes.results.forEach((result) => {
-    if (result.thumbnail && result.url && result.title && result.iframe_src) {
+    const thumbnail = result.thumbnail || result.thumbnail_src;
+    if (thumbnail && result.url && result.title) {
       videos.push({
-        img_src: result.thumbnail,
+        img_src: thumbnail,
         url: result.url,
         title: result.title,
         iframe_src: result.iframe_src,
       });
     }
   });
+
+  /* Embeddable videos first so the inline player is preferred */
+  videos.sort((a, b) => Number(!!b.iframe_src) - Number(!!a.iframe_src));
 
   return videos.slice(0, 10);
 };

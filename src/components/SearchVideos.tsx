@@ -1,5 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
-import { PlayCircle, PlayIcon, PlusIcon, VideoIcon } from 'lucide-react';
+import {
+  ExternalLink,
+  PlayCircle,
+  PlayIcon,
+  PlusIcon,
+  VideoIcon,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 import Lightbox, { GenericSlide, VideoSlide } from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
@@ -9,14 +15,17 @@ type Video = {
   url: string;
   img_src: string;
   title: string;
-  iframe_src: string;
+  /* Missing when the engine has no embeddable player (e.g. Naver) */
+  iframe_src?: string;
 };
 
 declare module 'yet-another-react-lightbox' {
   export interface VideoSlide extends GenericSlide {
     type: 'video-slide';
     src: string;
-    iframe_src: string;
+    iframe_src?: string;
+    url: string;
+    title: string;
   }
 
   interface SlideTypes {
@@ -78,6 +87,8 @@ const Searchvideos = ({
                   type: 'video-slide',
                   iframe_src: video.iframe_src,
                   src: video.img_src,
+                  url: video.url,
+                  title: video.title,
                 };
               }),
             );
@@ -196,10 +207,51 @@ const Searchvideos = ({
             render={{
               slide: ({ slide }) => {
                 const index = slides.findIndex((s) => s === slide);
-                return slide.type === 'video-slide' ? (
+                if (slide.type !== 'video-slide') return null;
+
+                if (!slide.iframe_src) {
+                  /* No embeddable player: show the thumbnail and link out */
+                  return (
+                    <div className="h-full w-full flex flex-col items-center justify-center space-y-4">
+                      <a
+                        href={slide.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative block"
+                      >
+                        <img
+                          src={slide.src}
+                          alt={slide.title}
+                          className="aspect-video max-h-[80vh] w-[95vw] rounded-2xl object-cover md:w-[80vw]"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <PlayCircle
+                            size={64}
+                            className="text-white/90 drop-shadow"
+                          />
+                        </div>
+                      </a>
+                      <a
+                        href={slide.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-row items-center space-x-2 rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition"
+                      >
+                        <span className="max-w-[70vw] truncate">
+                          {slide.title}
+                        </span>
+                        <ExternalLink size={15} />
+                      </a>
+                    </div>
+                  );
+                }
+
+                const iframeSrc = slide.iframe_src;
+
+                return (
                   <div className="h-full w-full flex flex-row items-center justify-center">
                     <iframe
-                      src={`${slide.iframe_src}${slide.iframe_src.includes('?') ? '&' : '?'}enablejsapi=1`}
+                      src={`${iframeSrc}${iframeSrc.includes('?') ? '&' : '?'}enablejsapi=1`}
                       ref={(el) => {
                         if (el) {
                           videoRefs.current[index] = el;
@@ -210,7 +262,7 @@ const Searchvideos = ({
                       allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
                     />
                   </div>
-                ) : null;
+                );
               },
             }}
           />

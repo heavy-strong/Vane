@@ -1,16 +1,18 @@
 import {
+  EnginesUIConfigField,
   SelectUIConfigField,
   StringUIConfigField,
   SwitchUIConfigField,
   TextareaUIConfigField,
   UIConfigField,
 } from '@/lib/config/types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Select from '../ui/Select';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
-import { Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { Switch } from '@headlessui/react';
+import { cn } from '@/lib/utils';
 
 const emitClientConfigChanged = () => {
   if (typeof window !== 'undefined') {
@@ -325,6 +327,251 @@ const SettingsSwitch = ({
   );
 };
 
+type EngineOption = { name: string; enabled: boolean; missing?: boolean };
+
+const SettingsEngines = ({
+  field,
+  value,
+  setValue,
+  dataAdd,
+}: {
+  field: EnginesUIConfigField;
+  value?: any;
+  setValue: (value: any) => void;
+  dataAdd: string;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [engines, setEngines] = useState<EngineOption[] | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const selected: string[] = Array.isArray(value) ? value : [];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `/api/searxng/engines?category=${encodeURIComponent(field.category)}`,
+        );
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.message ?? 'Failed to load engines');
+        }
+
+        if (!cancelled) {
+          setEngines(data.engines ?? []);
+          setFetchError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setEngines([]);
+          setFetchError(
+            err instanceof Error ? err.message : 'Failed to load engines',
+          );
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [field.category]);
+
+  const handleSave = async (newValue: string[]) => {
+    setLoading(true);
+    setValue(newValue);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          key: `${dataAdd}.${field.key}`,
+          value: newValue,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error('Failed to save config:', await res.text());
+        throw new Error('Failed to save configuration');
+      }
+    } catch (error) {
+      console.error('Error saving config:', error);
+      toast.error('Failed to save configuration.');
+    } finally {
+      setTimeout(() => setLoading(false), 150);
+    }
+  };
+
+  const toggle = (name: string) => {
+    const next = selected.includes(name)
+      ? selected.filter((n) => n !== name)
+      : [...selected, name];
+    handleSave(next);
+  };
+
+  const EngineChip = ({ engine }: { engine: EngineOption }) => {
+    const checked = selected.includes(engine.name);
+
+    return (
+      <button
+        type="button"
+        onClick={() => toggle(engine.name)}
+        disabled={loading}
+        title={
+          engine.missing
+            ? 'Selected, but no longer available on the SearXNG instance. Click to remove.'
+            : engine.enabled
+              ? 'Enabled by default in SearXNG'
+              : 'Disabled by default in SearXNG (still usable when selected here)'
+        }
+        className={cn(
+          'flex flex-row items-center space-x-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+          checked
+            ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+            : 'border-light-200 dark:border-dark-200 text-black/70 dark:text-white/70 hover:bg-light-200 dark:hover:bg-dark-200',
+          engine.missing &&
+            !checked &&
+            'border-dashed border-red-300 text-red-500/80 dark:border-red-900 dark:text-red-400/80',
+        )}
+      >
+        {checked ? (
+          <Check className="h-3 w-3" />
+        ) : (
+          <span
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-full',
+              engine.missing
+                ? 'bg-red-400/70'
+                : engine.enabled
+                  ? 'bg-emerald-500'
+                  : 'bg-black/20 dark:bg-white/20',
+            )}
+          />
+        )}
+        <span>{engine.name}</span>
+      </button>
+    );
+  };
+
+  /* Keep previously selected engines visible even if SearXNG no longer
+   * reports them, so the user can deselect them. */
+  const options: EngineOption[] = [
+    ...(engines ?? []),
+    ...selected
+      .filter((name) => !(engines ?? []).some((e) => e.name === name))
+      .map((name) => ({ name, enabled: false, missing: true })),
+  ];
+
+  /* "Enabled by default" is a SearXNG-side property, independent of whether
+   * the user has selected the engine here — group by it so the two concepts
+   * (default vs. selected) don't get conflated into a single visual signal. */
+  const defaultEngines = options.filter((e) => e.enabled);
+  const otherEngines = options.filter((e) => !e.enabled && !e.missing);
+  const missingEngines = options.filter((e) => e.missing);
+
+  return (
+    <section className="rounded-xl border border-light-200 bg-light-primary/80 p-4 lg:p-6 transition-colors dark:border-dark-200 dark:bg-dark-primary/80">
+      <div className="space-y-3 lg:space-y-5">
+        <div className="flex flex-row items-start justify-between space-x-3">
+          <div>
+            <h4 className="text-sm lg:text-sm text-black dark:text-white">
+              {field.name}
+            </h4>
+            <p className="text-[11px] lg:text-xs text-black/50 dark:text-white/50">
+              {field.description}
+            </p>
+          </div>
+          {loading && (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-black/40 dark:text-white/40" />
+          )}
+        </div>
+
+        {engines === null ? (
+          <div className="flex flex-row items-center space-x-2 text-xs text-black/50 dark:text-white/50">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Loading engines from SearXNG…</span>
+          </div>
+        ) : (
+          <>
+            {fetchError && (
+              <p className="text-[11px] lg:text-xs text-red-500">
+                {fetchError}
+              </p>
+            )}
+            {options.length === 0 ? (
+              <p className="text-xs text-black/50 dark:text-white/50">
+                No engines found for this category.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-row flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-black/40 dark:text-white/40">
+                  <span className="flex flex-row items-center space-x-1.5">
+                    <Check className="h-3 w-3 text-sky-500" />
+                    <span>Selected (used for search)</span>
+                  </span>
+                  <span className="flex flex-row items-center space-x-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span>Enabled by default in SearXNG</span>
+                  </span>
+                  <span className="flex flex-row items-center space-x-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-black/20 dark:bg-white/20" />
+                    <span>Off by default</span>
+                  </span>
+                </div>
+
+                {defaultEngines.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+                      Enabled by default
+                    </h5>
+                    <div className="flex flex-wrap gap-2">
+                      {defaultEngines.map((engine) => (
+                        <EngineChip key={engine.name} engine={engine} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {otherEngines.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+                      Off by default
+                    </h5>
+                    <div className="flex flex-wrap gap-2">
+                      {otherEngines.map((engine) => (
+                        <EngineChip key={engine.name} engine={engine} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {missingEngines.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-[11px] uppercase tracking-wide text-red-500/70">
+                      Selected, no longer available
+                    </h5>
+                    <div className="flex flex-wrap gap-2">
+                      {missingEngines.map((engine) => (
+                        <EngineChip key={engine.name} engine={engine} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const SettingsField = ({
   field,
   value,
@@ -367,6 +614,15 @@ const SettingsField = ({
     case 'switch':
       return (
         <SettingsSwitch
+          field={field}
+          value={val}
+          setValue={setVal}
+          dataAdd={dataAdd}
+        />
+      );
+    case 'engines':
+      return (
+        <SettingsEngines
           field={field}
           value={val}
           setValue={setVal}

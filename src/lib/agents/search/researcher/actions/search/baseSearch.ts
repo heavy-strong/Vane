@@ -8,11 +8,26 @@ import computeSimilarity from '@/lib/utils/computeSimilarity';
 import z from 'zod';
 import Scraper from '@/lib/scraper';
 import { splitText } from '@/lib/utils/splitText';
+import { resolveSearchOptions } from '@/lib/searchEngines';
+
+/* Explicit `searchConfig` (academic/social sources) wins; otherwise apply the
+ * user's web engine selection and Korean boost. */
+const buildSearchOptions = async (
+  q: string,
+  searchConfig?: SearxngSearchOptions,
+  originalQuery?: string,
+): Promise<SearxngSearchOptions> =>
+  searchConfig
+    ? { ...searchConfig }
+    : await resolveSearchOptions(q, 'web', originalQuery);
 
 export const executeSearch = async (input: {
   queries: string[];
   mode: SearchAgentConfig['mode'];
   searchConfig?: SearxngSearchOptions;
+  /* The user's original message; used for language detection since the
+   * LLM-generated `queries` are often rewritten into English. */
+  originalQuery?: string;
   researchBlock: ResearchBlock;
   session: InstanceType<typeof SessionManager>;
   llm: BaseLLM<any>;
@@ -43,9 +58,10 @@ export const executeSearch = async (input: {
     const search = async (q: string) => {
       let res: Awaited<ReturnType<typeof searchSearxng>>;
       try {
-        res = await searchSearxng(q, {
-          ...(input.searchConfig ? input.searchConfig : {}),
-        });
+        res = await searchSearxng(
+          q,
+          await buildSearchOptions(q, input.searchConfig, input.originalQuery),
+        );
       } catch (err) {
         console.error(`Web search failed for query "${q}":`, err);
         return;
@@ -201,9 +217,10 @@ export const executeSearch = async (input: {
     const search = async (q: string) => {
       let res: Awaited<ReturnType<typeof searchSearxng>>;
       try {
-        res = await searchSearxng(q, {
-          ...(input.searchConfig ? input.searchConfig : {}),
-        });
+        res = await searchSearxng(
+          q,
+          await buildSearchOptions(q, input.searchConfig, input.originalQuery),
+        );
       } catch (err) {
         console.error(`Web search failed for query "${q}":`, err);
         return;

@@ -100,6 +100,7 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
       embedding: additionalConfig.embedding,
       mode: additionalConfig.mode,
       queries: input.queries,
+      originalQuery: additionalConfig.followUp,
       researchBlock: researchBlock,
       session: additionalConfig.session,
     });

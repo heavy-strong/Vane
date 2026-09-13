@@ -72,6 +72,14 @@ export type AdditionalConfig = {
   session: SessionManager;
 };
 
+export type ActionExecutionConfig = AdditionalConfig & {
+  researchBlockId: string;
+  fileIds: string[];
+  mode: SearchAgentConfig['mode'];
+  /* The user's original message, before any LLM rewriting */
+  followUp: string;
+};
+
 export type ResearcherInput = {
   chatHistory: ChatTurnMessage[];
   followUp: string;
@@ -118,10 +126,6 @@ export interface ResearchAction<
   }) => boolean;
   execute: (
     params: z.infer<TSchema>,
-    additionalConfig: AdditionalConfig & {
-      researchBlockId: string;
-      fileIds: string[];
-      mode: SearchAgentConfig['mode'];
-    },
+    additionalConfig: ActionExecutionConfig,
   ) => Promise<ActionOutput>;
 }

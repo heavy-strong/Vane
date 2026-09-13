@@ -134,6 +134,59 @@ class ConfigManager {
         scope: 'server',
         env: 'SEARXNG_API_URL',
       },
+      {
+        name: 'Web search engines',
+        key: 'webEngines',
+        type: 'engines',
+        category: 'general',
+        required: false,
+        description:
+          'Engines used for web searches. Leave everything unchecked to use the engines enabled by default in SearXNG.',
+        default: [],
+        scope: 'server',
+      },
+      {
+        name: 'Image search engines',
+        key: 'imageEngines',
+        type: 'engines',
+        category: 'images',
+        required: false,
+        description: 'Engines used when searching for images.',
+        default: ['bing images', 'google images'],
+        scope: 'server',
+      },
+      {
+        name: 'Video search engines',
+        key: 'videoEngines',
+        type: 'engines',
+        category: 'videos',
+        required: false,
+        description:
+          'Engines used when searching for videos. Only videos with an embeddable player (e.g. YouTube) can be played inline.',
+        default: ['youtube'],
+        scope: 'server',
+      },
+      {
+        name: 'Boost Korean queries',
+        key: 'koreanBoost',
+        type: 'switch',
+        required: false,
+        description:
+          'When a query contains Hangul, add the Korean engines below and search with language set to Korean.',
+        default: true,
+        scope: 'server',
+      },
+      {
+        name: 'Korean web engines',
+        key: 'koreanEngines',
+        type: 'engines',
+        category: 'general',
+        required: false,
+        description:
+          'Extra engines added to web searches for Korean queries when "Boost Korean queries" is on.',
+        default: ['naver'],
+        scope: 'server',
+      },
     ],
   };
 

@@ -18,6 +18,12 @@ interface SearxngSearchResult {
   iframe_src?: string;
 }
 
+export interface SearxngEngine {
+  name: string;
+  categories: string[];
+  enabled: boolean;
+}
+
 const SEARXNG_CONCURRENCY = 3;
 const MAX_RETRIES = 3;
 const RETRYABLE_STATUSES = new Set([403, 429, 502, 503]);
@@ -39,7 +45,7 @@ const releaseSlot = () => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const buildSearchUrl = (query: string, opts?: SearxngSearchOptions) => {
+const buildSearxngUrl = (pathname: string) => {
   const searxngURL = getSearxngURL()?.trim();
 
   if (!searxngURL) {
@@ -49,12 +55,15 @@ const buildSearchUrl = (query: string, opts?: SearxngSearchOptions) => {
   }
 
   const normalized = searxngURL.replace(/\/+$/, '');
-  let url: URL;
   try {
-    url = new URL(`${normalized}/search`);
+    return new URL(`${normalized}${pathname}`);
   } catch {
     throw new Error(`Invalid SearXNG URL: ${searxngURL}`);
   }
+};
+
+const buildSearchUrl = (query: string, opts?: SearxngSearchOptions) => {
+  const url = buildSearxngUrl('/search');
 
   url.searchParams.set('format', 'json');
   url.searchParams.set('q', query);
@@ -153,5 +162,57 @@ export const searchSearxng = async (
     throw new Error(searxngErrorMessage(lastStatus, lastStatusText));
   } finally {
     releaseSlot();
+  }
+};
+
+const ENGINES_CACHE_TTL = 5 * 60 * 1000;
+let enginesCache: {
+  url: string;
+  fetchedAt: number;
+  engines: SearxngEngine[];
+} | null = null;
+
+/* Lists engines known to the SearXNG instance (via its `/config` endpoint).
+ * `enabled` reflects SearXNG's default engine set; disabled engines can still be
+ * requested explicitly through the `engines` search parameter. */
+export const getSearxngEngines = async (): Promise<SearxngEngine[]> => {
+  const url = buildSearxngUrl('/config');
+
+  if (
+    enginesCache &&
+    enginesCache.url === url.toString() &&
+    Date.now() - enginesCache.fetchedAt < ENGINES_CACHE_TTL
+  ) {
+    return enginesCache.engines;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      throw new Error(searxngErrorMessage(res.status, res.statusText));
+    }
+
+    const data = await res.json();
+    const engines: SearxngEngine[] = Array.isArray(data?.engines)
+      ? data.engines
+          .filter((e: any) => typeof e?.name === 'string')
+          .map((e: any) => ({
+            name: e.name,
+            categories: Array.isArray(e.categories) ? e.categories : [],
+            enabled: e.enabled === true,
+          }))
+      : [];
+
+    enginesCache = { url: url.toString(), fetchedAt: Date.now(), engines };
+    return engines;
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
