@@ -1,6 +1,11 @@
 import { UIConfigField } from '@/lib/config/types';
 import { getConfiguredModelProviderById } from '@/lib/config/serverRegistry';
-import { Model, ModelList, ProviderMetadata } from '../../types';
+import {
+  GenerateOptions,
+  Model,
+  ModelList,
+  ProviderMetadata,
+} from '../../types';
 import GeminiEmbedding from './geminiEmbedding';
 import BaseEmbedding from '../../base/embedding';
 import BaseModelProvider from '../../base/provider';
@@ -60,6 +65,14 @@ class GeminiProvider extends BaseModelProvider<GeminiConfig> {
         defaultChatModels.push({
           key: m.name,
           name: m.displayName,
+          // Gemini's thinking can't be disabled outright, only "default"
+          // (low) or "on" (high) - see GeminiLLM.getReasoningRequestOptions.
+          reasoning: {
+            supportedEfforts: ['low', 'high'],
+            defaultEffort: 'low',
+            defaultEnabled: true,
+            mandatory: true,
+          },
         });
       }
     });
@@ -83,7 +96,10 @@ class GeminiProvider extends BaseModelProvider<GeminiConfig> {
     };
   }
 
-  async loadChatModel(key: string): Promise<BaseLLM<any>> {
+  async loadChatModel(
+    key: string,
+    options?: GenerateOptions,
+  ): Promise<BaseLLM<any>> {
     const modelList = await this.getModelList();
 
     const exists = modelList.chat.find((m) => m.key === key);
@@ -98,6 +114,7 @@ class GeminiProvider extends BaseModelProvider<GeminiConfig> {
       apiKey: this.config.apiKey,
       model: key,
       baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      options,
     });
   }
 

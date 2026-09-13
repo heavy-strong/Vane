@@ -12,6 +12,8 @@ import { getTokenCount } from '@/lib/utils/splitText';
 
 class SearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
+    const startedAt = Date.now();
+
     const exists = await db.query.messages.findFirst({
       where: and(
         eq(messages.chatId, input.chatId),
@@ -28,6 +30,8 @@ class SearchAgent {
         createdAt: new Date().toISOString(),
         status: 'answering',
         responseBlocks: [],
+        modelName: input.config.modelInfo?.modelName ?? null,
+        modelProvider: input.config.modelInfo?.providerName ?? null,
       });
     } else {
       await db
@@ -42,6 +46,8 @@ class SearchAgent {
           status: 'answering',
           backendId: session.id,
           responseBlocks: [],
+          modelName: input.config.modelInfo?.modelName ?? null,
+          modelProvider: input.config.modelInfo?.providerName ?? null,
         })
         .where(
           and(
@@ -123,6 +129,7 @@ class SearchAgent {
       finalContextWithWidgets,
       input.config.systemInstructions,
       input.config.mode,
+      !!searchResults,
     );
 
     const answerStream = input.config.llm.streamText({
@@ -171,13 +178,16 @@ class SearchAgent {
       }
     }
 
-    session.emit('end', {});
+    const durationMs = Date.now() - startedAt;
+
+    session.emit('end', { durationMs });
 
     await db
       .update(messages)
       .set({
         status: 'completed',
         responseBlocks: session.getAllBlocks(),
+        durationMs,
       })
       .where(
         and(

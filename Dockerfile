@@ -70,8 +70,8 @@ RUN sed -i 's/\r$//' ./entrypoint.sh || true
 
 RUN echo "searxng ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-EXPOSE 3000 8080
+EXPOSE 3000 8889
 
-ENV SEARXNG_API_URL=http://localhost:8080
+ENV SEARXNG_API_URL=http://localhost:8889
 
 CMD ["/home/vane/entrypoint.sh"]

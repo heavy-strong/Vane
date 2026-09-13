@@ -2,7 +2,7 @@ import { ConfigModelProvider } from '../config/types';
 import BaseModelProvider, { createProviderInstance } from './base/provider';
 import { getConfiguredModelProviders } from '../config/serverRegistry';
 import { providers } from './providers';
-import { MinimalProvider, ModelList } from './types';
+import { GenerateOptions, MinimalProvider, ModelList } from './types';
 import configManager from '../config';
 
 class ModelRegistry {
@@ -35,10 +35,8 @@ class ModelRegistry {
   }
 
   async getActiveProviders() {
-    const providers: MinimalProvider[] = [];
-
-    await Promise.all(
-      this.activeProviders.map(async (p) => {
+    return Promise.all(
+      this.activeProviders.map(async (p): Promise<MinimalProvider> => {
         let m: ModelList = { chat: [], embedding: [] };
 
         try {
@@ -59,26 +57,53 @@ class ModelRegistry {
           };
         }
 
-        providers.push({
+        const uniqueModels = (models: ModelList['chat']) => [
+          ...new Map(models.map((model) => [model.key, model])).values(),
+        ];
+
+        return {
           id: p.id,
           name: p.name,
-          chatModels: m.chat,
-          embeddingModels: m.embedding,
-        });
+          type: p.type,
+          chatModels: uniqueModels(m.chat),
+          embeddingModels: uniqueModels(m.embedding),
+        };
       }),
     );
-
-    return providers;
   }
 
-  async loadChatModel(providerId: string, modelName: string) {
+  async loadChatModel(
+    providerId: string,
+    modelName: string,
+    options?: GenerateOptions,
+  ) {
     const provider = this.activeProviders.find((p) => p.id === providerId);
 
     if (!provider) throw new Error('Invalid provider id');
 
-    const model = await provider.provider.loadChatModel(modelName);
+    const model = await provider.provider.loadChatModel(modelName, options);
 
     return model;
+  }
+
+  async getChatModelDisplayInfo(providerId: string, key: string) {
+    const provider = this.activeProviders.find((p) => p.id === providerId);
+
+    if (!provider) {
+      return { providerName: providerId, modelName: key };
+    }
+
+    try {
+      const modelList = await provider.provider.getModelList();
+      const model = modelList.chat.find((m) => m.key === key);
+
+      return {
+        providerName: provider.name,
+        modelName: model?.name ?? key,
+      };
+    } catch (err) {
+      return { providerName: provider.name, modelName: key };
+    }
   }
 
   async loadEmbeddingModel(providerId: string, modelName: string) {
@@ -89,6 +114,16 @@ class ModelRegistry {
     const model = await provider.provider.loadEmbeddingModel(modelName);
 
     return model;
+  }
+
+  async getProviderModelCatalog(providerId: string): Promise<ModelList> {
+    const provider = this.activeProviders.find((p) => p.id === providerId);
+    if (!provider) throw new Error('Invalid provider id');
+    if (!provider.provider.getModelCatalog) {
+      throw new Error('This provider does not expose a model catalog');
+    }
+
+    return provider.provider.getModelCatalog();
   }
 
   async addProvider(
@@ -186,6 +221,9 @@ class ModelRegistry {
       };
     }
 
+    this.activeProviders = this.activeProviders.filter(
+      (provider) => provider.id !== providerId,
+    );
     this.activeProviders.push({
       ...updated,
       provider: instance,
@@ -198,13 +236,29 @@ class ModelRegistry {
     };
   }
 
-  /* Using async here because maybe in the future we might want to add some validation?? */
   async addProviderModel(
     providerId: string,
     type: 'embedding' | 'chat',
     model: any,
   ): Promise<any> {
-    const addedModel = configManager.addProviderModel(providerId, type, model);
+    const provider = this.activeProviders.find((p) => p.id === providerId);
+    if (!provider) throw new Error('Invalid provider id');
+
+    let modelToSave = model;
+    if (provider.provider.getModelCatalog) {
+      const catalog = await provider.provider.getModelCatalog();
+      const catalogModel = catalog[type].find(
+        (candidate) => candidate.key === model.key,
+      );
+      if (!catalogModel) throw new Error(`Invalid model key: ${model.key}`);
+      modelToSave = catalogModel;
+    }
+
+    const addedModel = configManager.addProviderModel(
+      providerId,
+      type,
+      modelToSave,
+    );
     return addedModel;
   }
 

@@ -11,6 +11,8 @@ import {
   Layers3,
   Plus,
   CornerDownRight,
+  Cpu,
+  Clock,
 } from 'lucide-react';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
@@ -26,6 +28,12 @@ import AssistantSteps from './AssistantSteps';
 import { ResearchBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
+
+const formatDuration = (ms: number) => {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
+};
 
 const ThinkTagProcessor = ({
   children,
@@ -189,11 +197,39 @@ const MessageBox = ({
 
                 {loading && isLast ? null : (
                   <div className="flex flex-row items-center justify-between w-full text-black dark:text-white py-4">
-                    <div className="flex flex-row items-center -ml-2">
+                    <div className="flex flex-row items-center -ml-2 gap-1">
                       <Rewrite
                         rewrite={rewrite}
                         messageId={section.message.messageId}
                       />
+                      {section.message.modelName && (
+                        <div
+                          className="flex flex-row items-center gap-1 px-2 py-1 text-xs text-black/50 dark:text-white/50"
+                          title={
+                            section.message.modelProvider
+                              ? `${section.message.modelProvider} · ${section.message.modelName}`
+                              : section.message.modelName
+                          }
+                        >
+                          <Cpu size={13} className="shrink-0" />
+                          <span className="truncate max-w-[10rem]">
+                            {section.message.modelProvider
+                              ? `${section.message.modelProvider} · ${section.message.modelName}`
+                              : section.message.modelName}
+                          </span>
+                        </div>
+                      )}
+                      {typeof section.message.durationMs === 'number' && (
+                        <div
+                          className="flex flex-row items-center gap-1 px-2 py-1 text-xs text-black/50 dark:text-white/50"
+                          title={`Answered in ${(section.message.durationMs / 1000).toFixed(2)}s`}
+                        >
+                          <Clock size={13} className="shrink-0" />
+                          <span>
+                            {formatDuration(section.message.durationMs)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-row items-center -mr-2">
                       <Copy initialMessage={parsedMessage} section={section} />

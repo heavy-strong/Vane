@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import ModelRegistry from '@/lib/models/registry';
-import { ModelWithProvider } from '@/lib/models/types';
+import { ModelWithProvider, ReasoningEffort } from '@/lib/models/types';
 import SearchAgent from '@/lib/agents/search';
 import SessionManager from '@/lib/session';
 import { ChatTurnMessage } from '@/lib/types';
@@ -31,6 +31,13 @@ const embeddingModelSchema: z.ZodType<ModelWithProvider> = z.object({
   key: z.string({ message: 'Embedding model key must be provided' }),
 });
 
+const reasoningSchema = z.object({
+  enabled: z.boolean().optional(),
+  effort: z
+    .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+    .optional(),
+});
+
 const bodySchema = z.object({
   message: messageSchema,
   optimizationMode: z.enum(['speed', 'balanced', 'quality'], {
@@ -44,6 +51,7 @@ const bodySchema = z.object({
   files: z.array(z.string()).optional().default([]),
   chatModel: chatModelSchema,
   embeddingModel: embeddingModelSchema,
+  reasoning: reasoningSchema.optional(),
   systemInstructions: z.string().nullable().optional().default(''),
 });
 
@@ -127,11 +135,19 @@ export const POST = async (req: Request) => {
 
     const registry = new ModelRegistry();
 
-    const [llm, embedding] = await Promise.all([
-      registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
+    const [llm, embedding, modelInfo] = await Promise.all([
+      registry.loadChatModel(body.chatModel.providerId, body.chatModel.key, {
+        reasoning: body.reasoning as
+          | { enabled?: boolean; effort?: ReasoningEffort }
+          | undefined,
+      }),
       registry.loadEmbeddingModel(
         body.embeddingModel.providerId,
         body.embeddingModel.key,
+      ),
+      registry.getChatModelDisplayInfo(
+        body.chatModel.providerId,
+        body.chatModel.key,
       ),
     ]);
 
@@ -151,6 +167,12 @@ export const POST = async (req: Request) => {
 
     const agent = new SearchAgent();
     const session = SessionManager.createSession();
+
+    session.emit('data', {
+      type: 'modelInfo',
+      modelName: modelInfo.modelName,
+      modelProvider: modelInfo.providerName,
+    });
 
     const responseStream = new TransformStream();
     const writer = responseStream.writable.getWriter();
@@ -185,12 +207,23 @@ export const POST = async (req: Request) => {
               }) + '\n',
             ),
           );
+        } else if (data.type === 'modelInfo') {
+          writer.write(
+            encoder.encode(
+              JSON.stringify({
+                type: 'modelInfo',
+                modelName: data.modelName,
+                modelProvider: data.modelProvider,
+              }) + '\n',
+            ),
+          );
         }
       } else if (event === 'end') {
         writer.write(
           encoder.encode(
             JSON.stringify({
               type: 'messageEnd',
+              durationMs: data?.durationMs,
             }) + '\n',
           ),
         );
@@ -223,6 +256,10 @@ export const POST = async (req: Request) => {
           mode: body.optimizationMode,
           fileIds: body.files,
           systemInstructions: body.systemInstructions || 'None',
+          modelInfo: {
+            providerName: modelInfo.providerName,
+            modelName: modelInfo.modelName,
+          },
         },
       })
       .catch((err) => {

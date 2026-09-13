@@ -1,4 +1,4 @@
-import { ModelList, ProviderMetadata } from '../types';
+import { GenerateOptions, ModelList, ProviderMetadata } from '../types';
 import { UIConfigField } from '@/lib/config/types';
 import BaseLLM from './llm';
 import BaseEmbedding from './embedding';
@@ -11,7 +11,11 @@ abstract class BaseModelProvider<CONFIG> {
   ) {}
   abstract getDefaultModels(): Promise<ModelList>;
   abstract getModelList(): Promise<ModelList>;
-  abstract loadChatModel(modelName: string): Promise<BaseLLM<any>>;
+  getModelCatalog?(): Promise<ModelList>;
+  abstract loadChatModel(
+    modelName: string,
+    options?: GenerateOptions,
+  ): Promise<BaseLLM<any>>;
   abstract loadEmbeddingModel(modelName: string): Promise<BaseEmbedding<any>>;
   static getProviderConfigFields(): UIConfigField[] {
     throw new Error('Method not implemented.');

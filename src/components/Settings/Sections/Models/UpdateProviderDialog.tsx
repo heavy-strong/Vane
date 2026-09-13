@@ -34,7 +34,7 @@ const UpdateProvider = ({
     });
 
     setConfig(config);
-  }, [fields]);
+  }, [fields, modelProvider.config, modelProvider.name]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,14 +66,15 @@ const UpdateProvider = ({
           return p;
         });
       });
+      window.dispatchEvent(new Event('providers-changed'));
 
       toast.success('Connection updated successfully.');
+      setOpen(false);
     } catch (error) {
       console.error('Error updating provider:', error);
       toast.error('Failed to update connection.');
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   };
 

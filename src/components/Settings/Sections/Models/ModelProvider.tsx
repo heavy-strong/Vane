@@ -33,8 +33,11 @@ const ModelProvider = ({
       });
 
       if (!res.ok) {
-        throw new Error('Failed to delete model: ' + (await res.text()));
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || 'Failed to delete model');
       }
+
+      const data = await res.json();
 
       setProviders(
         (prev) =>
@@ -42,27 +45,30 @@ const ModelProvider = ({
             if (provider.id === modelProvider.id) {
               return {
                 ...provider,
-                ...(type === 'chat'
-                  ? {
-                      chatModels: provider.chatModels.filter(
-                        (m) => m.key !== modelKey,
-                      ),
-                    }
-                  : {
-                      embeddingModels: provider.embeddingModels.filter(
-                        (m) => m.key !== modelKey,
-                      ),
-                    }),
+                chatModels:
+                  data.provider?.chatModels ??
+                  (type === 'chat'
+                    ? provider.chatModels.filter((m) => m.key !== modelKey)
+                    : provider.chatModels),
+                embeddingModels:
+                  data.provider?.embeddingModels ??
+                  (type === 'embedding'
+                    ? provider.embeddingModels.filter((m) => m.key !== modelKey)
+                    : provider.embeddingModels),
               };
             }
             return provider;
           }) as ConfigModelProvider[],
       );
 
+      window.dispatchEvent(new Event('providers-changed'));
+
       toast.success('Model deleted successfully.');
     } catch (err) {
       console.error('Failed to delete model', err);
-      toast.error('Failed to delete model.');
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to delete model.',
+      );
     }
   };
 
@@ -115,6 +121,8 @@ const ModelProvider = ({
             {!modelProvider.chatModels.some((m) => m.key === 'error') && (
               <AddModel
                 providerId={modelProvider.id}
+                providerType={modelProvider.type}
+                existingModels={modelProvider.chatModels}
                 setProviders={setProviders}
                 type="chat"
               />
@@ -170,6 +178,8 @@ const ModelProvider = ({
             {!modelProvider.embeddingModels.some((m) => m.key === 'error') && (
               <AddModel
                 providerId={modelProvider.id}
+                providerType={modelProvider.type}
+                existingModels={modelProvider.embeddingModels}
                 setProviders={setProviders}
                 type="embedding"
               />

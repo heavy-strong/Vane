@@ -1,6 +1,9 @@
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const GET = async (req: Request) => {
   try {
     const registry = new ModelRegistry();

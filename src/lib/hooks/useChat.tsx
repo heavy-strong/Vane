@@ -14,7 +14,7 @@ import crypto from 'crypto';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
-import { MinimalProvider } from '../models/types';
+import { MinimalProvider, ReasoningEffort } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
 import { Widget } from '@/components/ChatWindow';
@@ -44,6 +44,8 @@ type ChatContext = {
   isReady: boolean;
   hasError: boolean;
   chatModelProvider: ChatModelProvider;
+  chatThinkingEnabled?: boolean;
+  chatReasoningEffort?: ReasoningEffort;
   embeddingModelProvider: EmbeddingModelProvider;
   researchEnded: boolean;
   setResearchEnded: (ended: boolean) => void;
@@ -58,6 +60,8 @@ type ChatContext = {
   ) => Promise<void>;
   rewrite: (messageId: string) => void;
   setChatModelProvider: (provider: ChatModelProvider) => void;
+  setChatThinkingEnabled: (enabled?: boolean) => void;
+  setChatReasoningEffort: (effort?: ReasoningEffort) => void;
   setEmbeddingModelProvider: (provider: EmbeddingModelProvider) => void;
 };
 
@@ -95,6 +99,7 @@ const checkConfig = async (
       headers: {
         'Content-Type': 'application/json',
       },
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -112,9 +117,13 @@ const checkConfig = async (
       );
     }
 
+    const storedChatModelProvider = providers.find(
+      (p) => p.id === chatModelProviderId,
+    );
     const chatModelProvider =
-      providers.find((p) => p.id === chatModelProviderId) ??
-      providers.find((p) => p.chatModels.length > 0);
+      (storedChatModelProvider?.chatModels.length ?? 0) > 0
+        ? storedChatModelProvider
+        : providers.find((p) => p.chatModels.length > 0);
 
     if (!chatModelProvider) {
       throw new Error(
@@ -129,9 +138,13 @@ const checkConfig = async (
       chatModelProvider.chatModels[0];
     chatModelKey = chatModel.key;
 
+    const storedEmbeddingModelProvider = providers.find(
+      (p) => p.id === embeddingModelProviderId,
+    );
     const embeddingModelProvider =
-      providers.find((p) => p.id === embeddingModelProviderId) ??
-      providers.find((p) => p.embeddingModels.length > 0);
+      (storedEmbeddingModelProvider?.embeddingModels.length ?? 0) > 0
+        ? storedEmbeddingModelProvider
+        : providers.find((p) => p.embeddingModels.length > 0);
 
     if (!embeddingModelProvider) {
       throw new Error(
@@ -178,64 +191,73 @@ const loadMessages = async (
   chatHistory: React.MutableRefObject<[string, string][]>,
   setSources: (sources: string[]) => void,
   setNotFound: (notFound: boolean) => void,
+  setHasError: (hasError: boolean) => void,
   setFiles: (files: File[]) => void,
   setFileIds: (fileIds: string[]) => void,
 ) => {
-  const res = await fetch(`/api/chats/${chatId}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  try {
+    const res = await fetch(`/api/chats/${chatId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (res.status === 404) {
-    setNotFound(true);
-    setIsMessagesLoaded(true);
-    return;
-  }
-
-  const data = await res.json();
-
-  const messages = data.messages as Message[];
-
-  setMessages(messages);
-
-  const history: [string, string][] = [];
-  messages.forEach((msg) => {
-    history.push(['human', msg.query]);
-
-    const textBlocks = msg.responseBlocks
-      .filter(
-        (block): block is Block & { type: 'text' } => block.type === 'text',
-      )
-      .map((block) => block.data)
-      .join('\n');
-
-    if (textBlocks) {
-      history.push(['assistant', textBlocks]);
+    if (res.status === 404) {
+      setNotFound(true);
+      return;
     }
-  });
 
-  console.debug(new Date(), 'app:messages_loaded');
+    if (!res.ok) {
+      throw new Error(`Chat loading failed with status code ${res.status}`);
+    }
 
-  if (messages.length > 0) {
-    document.title = messages[0].query;
+    const data = await res.json();
+    const messages = (data.messages ?? []) as Message[];
+
+    setMessages(messages);
+
+    const history: [string, string][] = [];
+    messages.forEach((msg) => {
+      history.push(['human', msg.query]);
+
+      const textBlocks = msg.responseBlocks
+        .filter(
+          (block): block is Block & { type: 'text' } => block.type === 'text',
+        )
+        .map((block) => block.data)
+        .join('\n');
+
+      if (textBlocks) {
+        history.push(['assistant', textBlocks]);
+      }
+    });
+
+    console.debug(new Date(), 'app:messages_loaded');
+
+    if (messages.length > 0) {
+      document.title = messages[0].query;
+    }
+
+    const files = (data.chat?.files ?? []).map((file: any) => {
+      return {
+        fileName: file.name,
+        fileExtension: file.name.split('.').pop(),
+        fileId: file.fileId,
+      };
+    });
+
+    setFiles(files);
+    setFileIds(files.map((file: File) => file.fileId));
+
+    chatHistory.current = history;
+    setSources(data.chat?.sources ?? ['web']);
+  } catch (err) {
+    console.error('An error occurred while loading chat:', err);
+    setHasError(true);
+  } finally {
+    setIsMessagesLoaded(true);
   }
-
-  const files = data.chat.files.map((file: any) => {
-    return {
-      fileName: file.name,
-      fileExtension: file.name.split('.').pop(),
-      fileId: file.fileId,
-    };
-  });
-
-  setFiles(files);
-  setFileIds(files.map((file: File) => file.fileId));
-
-  chatHistory.current = history;
-  setSources(data.chat.sources);
-  setIsMessagesLoaded(true);
 };
 
 export const chatContext = createContext<ChatContext>({
@@ -254,6 +276,8 @@ export const chatContext = createContext<ChatContext>({
   notFound: false,
   optimizationMode: '',
   chatModelProvider: { key: '', providerId: '' },
+  chatThinkingEnabled: undefined,
+  chatReasoningEffort: undefined,
   embeddingModelProvider: { key: '', providerId: '' },
   researchEnded: false,
   rewrite: () => {},
@@ -263,6 +287,8 @@ export const chatContext = createContext<ChatContext>({
   setSources: () => {},
   setOptimizationMode: () => {},
   setChatModelProvider: () => {},
+  setChatThinkingEnabled: () => {},
+  setChatReasoningEffort: () => {},
   setEmbeddingModelProvider: () => {},
   setResearchEnded: () => {},
 });
@@ -301,6 +327,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       providerId: '',
     },
   );
+  const [chatReasoningEffort, setChatReasoningEffort] = useState<
+    ReasoningEffort | undefined
+  >();
+  const [chatThinkingEnabled, setChatThinkingEnabled] = useState<boolean>();
+
+  useEffect(() => {
+    const savedEffort = localStorage.getItem('chatReasoningEffort');
+    const savedThinking = localStorage.getItem('chatThinkingEnabled');
+    if (savedThinking === 'true' || savedThinking === 'false') {
+      setChatThinkingEnabled(savedThinking === 'true');
+    }
+    if (savedEffort === 'none') {
+      setChatThinkingEnabled(false);
+      localStorage.setItem('chatThinkingEnabled', 'false');
+      localStorage.removeItem('chatReasoningEffort');
+    } else if (
+      savedEffort &&
+      ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(
+        savedEffort,
+      )
+    ) {
+      setChatReasoningEffort(savedEffort as ReasoningEffort);
+    }
+  }, []);
 
   const [embeddingModelProvider, setEmbeddingModelProvider] =
     useState<EmbeddingModelProvider>({
@@ -497,6 +547,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         chatHistory,
         setSources,
         setNotFound,
+        setHasError,
         setFiles,
         setFileIds,
       );
@@ -562,6 +613,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           ),
         );
         return;
+      }
+
+      if (data.type === 'modelInfo') {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? {
+                  ...msg,
+                  modelName: data.modelName,
+                  modelProvider: data.modelProvider,
+                }
+              : msg,
+          ),
+        );
       }
 
       if (data.type === 'researchComplete') {
@@ -655,7 +720,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.messageId === messageId
-              ? { ...msg, status: 'completed' as const }
+              ? {
+                  ...msg,
+                  status: 'completed' as const,
+                  durationMs:
+                    typeof data.durationMs === 'number'
+                      ? data.durationMs
+                      : msg.durationMs,
+                }
               : msg,
           ),
         );
@@ -717,6 +789,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     rewrite = false,
   ) => {
     if (loading || !message) return;
+    if (!chatModelProvider.providerId || !chatModelProvider.key) {
+      toast.error('Select a chat model before sending a message.');
+      return;
+    }
+    if (!embeddingModelProvider.providerId || !embeddingModelProvider.key) {
+      toast.error('Select an embedding model before sending a message.');
+      return;
+    }
     setLoading(true);
     setResearchEnded(false);
     setMessageAppeared(false);
@@ -768,6 +848,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           key: chatModelProvider.key,
           providerId: chatModelProvider.providerId,
         },
+        reasoning:
+          chatThinkingEnabled !== undefined || chatReasoningEffort
+            ? {
+                enabled: chatThinkingEnabled ?? true,
+                effort:
+                  chatThinkingEnabled === false
+                    ? undefined
+                    : chatReasoningEffort,
+              }
+            : undefined,
         embeddingModel: {
           key: embeddingModelProvider.key,
           providerId: embeddingModelProvider.providerId,
@@ -830,6 +920,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sendMessage,
         setChatModelProvider,
         chatModelProvider,
+        chatThinkingEnabled,
+        setChatThinkingEnabled,
+        chatReasoningEffort,
+        setChatReasoningEffort,
         embeddingModelProvider,
         setEmbeddingModelProvider,
         researchEnded,

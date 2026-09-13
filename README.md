@@ -161,6 +161,16 @@ If you prefer to build from source or need more control:
 
 **Note**: Using Docker is recommended as it simplifies the setup process, especially for managing environment variables and dependencies.
 
+### Environment-based provider configuration
+
+For unattended or container deployments, copy `.env.example` to `.env` and add the API keys you use. The file is ignored by Git. At startup, Vane automatically creates a provider connection for each fully configured provider.
+
+```bash
+OPENROUTER_API_KEY=your-openrouter-api-key
+```
+
+For Docker Compose, the same `.env` file is read and `OPENROUTER_API_KEY` is passed into the Vane container. Restart the app after changing a key. You can still create and manage additional connections in Settings.
+
 See the [installation documentation](https://github.com/ItzCrazyKns/Vane/tree/master/docs/installation) for more information like updating, etc.
 
 ### Troubleshooting

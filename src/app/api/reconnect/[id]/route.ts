@@ -46,12 +46,23 @@ export const POST = async (
               }) + '\n',
             ),
           );
+        } else if (data.type === 'modelInfo') {
+          writer.write(
+            encoder.encode(
+              JSON.stringify({
+                type: 'modelInfo',
+                modelName: data.modelName,
+                modelProvider: data.modelProvider,
+              }) + '\n',
+            ),
+          );
         }
       } else if (event === 'end') {
         writer.write(
           encoder.encode(
             JSON.stringify({
               type: 'messageEnd',
+              durationMs: data?.durationMs,
             }) + '\n',
           ),
         );

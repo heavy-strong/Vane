@@ -27,17 +27,21 @@ const DeleteProvider = ({
       });
 
       if (!res.ok) {
-        throw new Error('Failed to delete provider');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || 'Failed to delete provider');
       }
 
       setProviders((prev) => {
         return prev.filter((p) => p.id !== modelProvider.id);
       });
+      window.dispatchEvent(new Event('providers-changed'));
 
       toast.success('Connection deleted successfully.');
     } catch (error) {
       console.error('Error deleting provider:', error);
-      toast.error('Failed to delete connection.');
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete connection.',
+      );
     } finally {
       setLoading(false);
     }

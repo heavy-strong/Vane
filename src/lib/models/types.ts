@@ -4,7 +4,29 @@ import { Message } from '../types';
 type Model = {
   name: string;
   key: string;
+  description?: string;
+  contextLength?: number;
+  pricing?: {
+    prompt?: string;
+    completion?: string;
+  };
+  reasoning?: {
+    supportedEfforts?: ReasoningEffort[] | null;
+    defaultEffort?: ReasoningEffort;
+    defaultEnabled?: boolean;
+    mandatory?: boolean;
+    supportsMaxTokens?: boolean;
+  };
 };
+
+type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 
 type ModelList = {
   embedding: Model[];
@@ -19,6 +41,7 @@ type ProviderMetadata = {
 type MinimalProvider = {
   id: string;
   name: string;
+  type?: string;
   chatModels: Model[];
   embeddingModels: Model[];
 };
@@ -35,6 +58,10 @@ type GenerateOptions = {
   stopSequences?: string[];
   frequencyPenalty?: number;
   presencePenalty?: number;
+  reasoning?: {
+    enabled?: boolean;
+    effort?: ReasoningEffort;
+  };
 };
 
 type Tool = {
@@ -87,6 +114,7 @@ type StreamObjectOutput<T> = {
 
 export type {
   Model,
+  ReasoningEffort,
   ModelList,
   ProviderMetadata,
   MinimalProvider,

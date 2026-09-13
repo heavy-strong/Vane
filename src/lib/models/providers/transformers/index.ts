@@ -12,6 +12,8 @@ const defaultEmbeddingModels: Model[] = [
   {
     name: 'all-MiniLM-L6-v2',
     key: 'Xenova/all-MiniLM-L6-v2',
+    description:
+      'English-only. Similarity scores for non-English queries (e.g. Korean) against search results are unreliable and can cause searches to return no results - prefer the multilingual model below for non-English usage.',
   },
   {
     name: 'mxbai-embed-large-v1',
@@ -20,6 +22,12 @@ const defaultEmbeddingModels: Model[] = [
   {
     name: 'nomic-embed-text-v1',
     key: 'Xenova/nomic-embed-text-v1',
+  },
+  {
+    name: 'paraphrase-multilingual-MiniLM-L12-v2',
+    key: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+    description:
+      'Multilingual (50+ languages, incl. Korean). Recommended if you use the assistant in a non-English language.',
   },
 ];
 

@@ -179,7 +179,32 @@ class ConfigManager {
   }
 
   private migrateConfig(config: Config): Config {
-    /* TODO: Add migrations */
+    config.modelProviders = Array.isArray(config.modelProviders)
+      ? config.modelProviders
+      : [];
+    config.search = config.search ?? {};
+
+    const uniqueModels = (models: ConfigModelProvider['chatModels']) => [
+      ...new Map(
+        (Array.isArray(models) ? models : [])
+          .filter((model) => model?.key && model?.name)
+          .map((model) => [model.key, model]),
+      ).values(),
+    ];
+
+    config.modelProviders.forEach((provider) => {
+      provider.config = provider.config ?? {};
+      provider.chatModels = uniqueModels(provider.chatModels);
+      provider.embeddingModels = uniqueModels(provider.embeddingModels);
+      provider.disabledChatModelKeys = [
+        ...new Set(provider.disabledChatModelKeys ?? []),
+      ];
+      provider.disabledEmbeddingModelKeys = [
+        ...new Set(provider.disabledEmbeddingModelKeys ?? []),
+      ];
+      provider.hash = hashObj(provider.config);
+    });
+
     return config;
   }
 
@@ -304,7 +329,7 @@ class ConfigManager {
       (p) => p.id === id,
     );
 
-    if (index === -1) return;
+    if (index === -1) throw new Error('Provider not found');
 
     this.currentConfig.modelProviders =
       this.currentConfig.modelProviders.filter((p) => p.id !== id);
@@ -321,6 +346,7 @@ class ConfigManager {
 
     provider.name = name;
     provider.config = config;
+    provider.hash = hashObj(config);
 
     this.saveConfig();
 
@@ -338,17 +364,25 @@ class ConfigManager {
 
     if (!provider) throw new Error('Invalid provider id');
 
-    delete model.type;
+    const modelToSave = { ...model };
+    delete modelToSave.type;
 
-    if (type === 'chat') {
-      provider.chatModels.push(model);
-    } else {
-      provider.embeddingModels.push(model);
+    const models =
+      type === 'chat' ? provider.chatModels : provider.embeddingModels;
+    if (models.some((existingModel) => existingModel.key === modelToSave.key)) {
+      throw new Error(`Model already exists: ${modelToSave.key}`);
     }
+
+    models.push(modelToSave);
+    const disabledKey =
+      type === 'chat' ? 'disabledChatModelKeys' : 'disabledEmbeddingModelKeys';
+    provider[disabledKey] = (provider[disabledKey] ?? []).filter(
+      (key) => key !== modelToSave.key,
+    );
 
     this.saveConfig();
 
-    return model;
+    return modelToSave;
   }
 
   public removeProviderModel(
@@ -362,14 +396,26 @@ class ConfigManager {
 
     if (!provider) throw new Error('Invalid provider id');
 
+    const models =
+      type === 'chat' ? provider.chatModels : provider.embeddingModels;
+    if (!models.some((model) => model.key === modelKey)) {
+      throw new Error(`Model not found: ${modelKey}`);
+    }
+
     if (type === 'chat') {
       provider.chatModels = provider.chatModels.filter(
         (m) => m.key !== modelKey,
       );
+      provider.disabledChatModelKeys = [
+        ...new Set([...(provider.disabledChatModelKeys ?? []), modelKey]),
+      ];
     } else {
       provider.embeddingModels = provider.embeddingModels.filter(
         (m) => m.key != modelKey,
       );
+      provider.disabledEmbeddingModelKeys = [
+        ...new Set([...(provider.disabledEmbeddingModelKeys ?? []), modelKey]),
+      ];
     }
 
     this.saveConfig();

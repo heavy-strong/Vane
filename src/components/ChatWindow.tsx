@@ -20,6 +20,9 @@ export interface Message extends BaseMessage {
   query: string;
   responseBlocks: Block[];
   status: 'answering' | 'completed' | 'error';
+  modelName?: string | null;
+  modelProvider?: string | null;
+  durationMs?: number | null;
 }
 
 export interface File {

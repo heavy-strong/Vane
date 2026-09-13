@@ -51,6 +51,15 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     });
   }
 
+  protected getReasoningRequestOptions(): Record<string, any> {
+    const reasoning = this.config.options?.reasoning;
+    if (!reasoning) return {};
+
+    return this.config.baseURL?.includes('openrouter.ai')
+      ? { reasoning }
+      : { reasoning_effort: reasoning.effort };
+  }
+
   convertToOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
     return messages.map((msg) => {
       if (msg.role === 'tool') {
@@ -110,6 +119,7 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
         this.config.options?.frequencyPenalty,
       presence_penalty:
         input.options?.presencePenalty ?? this.config.options?.presencePenalty,
+      ...this.getReasoningRequestOptions(),
     });
 
     if (response.choices && response.choices.length > 0) {
@@ -167,6 +177,7 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
         this.config.options?.frequencyPenalty,
       presence_penalty:
         input.options?.presencePenalty ?? this.config.options?.presencePenalty,
+      ...this.getReasoningRequestOptions(),
       stream: true,
     });
 
@@ -224,6 +235,7 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
         this.config.options?.frequencyPenalty,
       presence_penalty:
         input.options?.presencePenalty ?? this.config.options?.presencePenalty,
+      ...this.getReasoningRequestOptions(),
       response_format: zodResponseFormat(input.schema, 'object'),
     });
 
@@ -261,6 +273,7 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
         this.config.options?.frequencyPenalty,
       presence_penalty:
         input.options?.presencePenalty ?? this.config.options?.presencePenalty,
+      reasoning: this.config.options?.reasoning as any,
       text: {
         format: zodTextFormat(input.schema, 'object'),
       },

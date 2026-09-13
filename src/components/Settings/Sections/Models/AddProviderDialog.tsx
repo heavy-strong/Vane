@@ -81,14 +81,15 @@ const AddProvider = ({
       const data: ConfigModelProvider = (await res.json()).provider;
 
       setProviders((prev) => [...prev, data]);
+      window.dispatchEvent(new Event('providers-changed'));
 
       toast.success('Connection added successfully.');
+      setOpen(false);
     } catch (error) {
       console.error('Error adding provider:', error);
       toast.error('Failed to add connection.');
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   };
 

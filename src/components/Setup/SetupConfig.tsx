@@ -28,7 +28,7 @@ const SetupConfig = ({
     const fetchProviders = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch('/api/providers');
+        const res = await fetch('/api/providers', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch providers');
 
         const data = await res.json();
@@ -66,8 +66,9 @@ const SetupConfig = ({
   const visibleProviders = providers.filter(
     (p) => p.name.toLowerCase() !== 'transformers',
   );
-  const hasProviders =
-    visibleProviders.filter((p) => p.chatModels.length > 0).length > 0;
+  const hasChatModel = visibleProviders.some((p) => p.chatModels.length > 0);
+  const hasEmbeddingModel = providers.some((p) => p.embeddingModels.length > 0);
+  const hasProviders = hasChatModel && hasEmbeddingModel;
 
   return (
     <div className="w-[95vw] md:w-[80vw] lg:w-[65vw] mx-auto px-2 sm:px-4 md:px-6 flex flex-col space-y-6">

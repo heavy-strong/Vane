@@ -16,6 +16,9 @@ export const messages = sqliteTable('messages', {
   status: text({ enum: ['answering', 'completed', 'error'] }).default(
     'answering',
   ),
+  modelName: text('modelName'),
+  modelProvider: text('modelProvider'),
+  durationMs: integer('durationMs'),
 });
 
 interface DBFile {

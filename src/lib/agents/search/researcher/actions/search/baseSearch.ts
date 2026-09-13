@@ -56,26 +56,43 @@ export const executeSearch = async (input: {
       try {
         const queryEmbedding = (await input.embedding.embedText([q]))[0];
 
-        resultChunks = (
-          await Promise.all(
-            res.results.map(async (r) => {
-              const content = r.content || r.title;
-              const chunkEmbedding = (
-                await input.embedding.embedText([content])
-              )[0];
+        const scoredChunks = await Promise.all(
+          res.results.map(async (r) => {
+            const content = r.content || r.title;
+            const chunkEmbedding = (
+              await input.embedding.embedText([content])
+            )[0];
 
-              return {
-                content,
-                metadata: {
-                  title: r.title,
-                  url: r.url,
-                  similarity: computeSimilarity(queryEmbedding, chunkEmbedding),
-                  embedding: chunkEmbedding,
-                },
-              };
-            }),
-          )
-        ).filter((c) => c.metadata.similarity > 0.5);
+            return {
+              content,
+              metadata: {
+                title: r.title,
+                url: r.url,
+                similarity: computeSimilarity(queryEmbedding, chunkEmbedding),
+                embedding: chunkEmbedding,
+              },
+            };
+          }),
+        );
+
+        const relevantChunks = scoredChunks.filter(
+          (c) => c.metadata.similarity > 0.5,
+        );
+
+        // The 0.5 threshold assumes query and content are embedded in a
+        // space where they're comparable - with an English-only embedding
+        // model (e.g. the default all-MiniLM-L6-v2) this silently fails for
+        // non-English queries: a Korean query against genuinely relevant
+        // English content commonly scores well under 0.5, so every result
+        // gets dropped and the assistant ends up with nothing to answer
+        // from. Rather than returning zero results in that case, fall back
+        // to the best-scoring results instead of discarding everything.
+        resultChunks =
+          relevantChunks.length > 0
+            ? relevantChunks
+            : scoredChunks
+                .sort((a, b) => b.metadata.similarity - a.metadata.similarity)
+                .slice(0, 5);
       } catch (err) {
         resultChunks = res.results.map((r) => {
           const content = r.content || r.title;
