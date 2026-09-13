@@ -39,3 +39,7 @@ db.sqlite
 /searxng
 
 certificates
+# Desktop (Tauri)
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+

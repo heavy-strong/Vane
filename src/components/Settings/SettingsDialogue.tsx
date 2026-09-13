@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Search,
   Sliders,
+  Keyboard,
   ToggleRight,
 } from 'lucide-react';
 import Preferences from './Sections/Preferences';
@@ -27,6 +28,15 @@ const sections = [
     icon: Sliders,
     component: Preferences,
     dataAdd: 'preferences',
+  },
+  {
+    key: 'shortcuts',
+    name: 'Keyboard shortcuts',
+    description:
+      'See what each shortcut does and choose your own key combinations.',
+    icon: Keyboard,
+    component: Preferences,
+    dataAdd: 'shortcuts',
   },
   {
     key: 'personalization',

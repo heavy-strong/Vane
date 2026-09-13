@@ -97,14 +97,15 @@ class ConfigManager {
         default: true,
         scope: 'client',
       },
+    ],
+    shortcuts: [
       {
-        name: 'New question shortcut',
+        name: 'New question',
         key: 'newQuestionShortcut',
-        type: 'string',
+        type: 'shortcut',
         required: false,
         description:
-          'Keyboard shortcut for starting a new question. Use modifiers such as Ctrl, Alt, Shift, or Meta (for example, Ctrl+Alt+N).',
-        placeholder: 'Ctrl+Alt+N',
+          'Open a fresh chat from anywhere in Vane. Click the shortcut and press the key combination you want to use.',
         default: 'Ctrl+Alt+N',
         scope: 'client',
       },

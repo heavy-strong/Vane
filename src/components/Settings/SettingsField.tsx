@@ -1,18 +1,26 @@
 import {
   EnginesUIConfigField,
   SelectUIConfigField,
+  ShortcutUIConfigField,
   StringUIConfigField,
   SwitchUIConfigField,
   TextareaUIConfigField,
   UIConfigField,
 } from '@/lib/config/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Select from '../ui/Select';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Keyboard, Loader2, RotateCcw } from 'lucide-react';
 import { Switch } from '@headlessui/react';
 import { cn } from '@/lib/utils';
+import { shortcutFromEvent } from '@/lib/shortcuts';
+import {
+  isDesktop,
+  loadDesktopShortcut,
+  saveDesktopShortcut,
+  setDesktopShortcutRecording,
+} from '@/lib/desktop';
 
 const emitClientConfigChanged = () => {
   if (typeof window !== 'undefined') {
@@ -171,6 +179,230 @@ const SettingsInput = ({
             </span>
           )}
         </div>
+      </div>
+    </section>
+  );
+};
+
+const SettingsShortcut = ({
+  field,
+  value,
+  setValue,
+}: {
+  field: ShortcutUIConfigField;
+  value?: any;
+  setValue: (value: any) => void;
+}) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [message, setMessage] = useState('');
+  const desktop = isDesktop();
+  const [loading, setLoading] = useState(desktop);
+  const [connectionError, setConnectionError] = useState(false);
+  const [defaultShortcut, setDefaultShortcut] = useState(field.default || '');
+  const recordingButton = useRef<HTMLButtonElement>(null);
+  const shortcut = value || field.default || '';
+
+  useEffect(() => {
+    if (!desktop) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const settings = await loadDesktopShortcut();
+        if (!active) return;
+        setValue(settings.shortcut);
+        setDefaultShortcut(settings.defaultShortcut);
+        setConnectionError(false);
+        setMessage('');
+      } catch (error) {
+        if (!active) return;
+        setConnectionError(true);
+        setMessage(String(error));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void refresh();
+    window.addEventListener('desktop-shortcut-changed', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('desktop-shortcut-changed', refresh);
+      void setDesktopShortcutRecording(false).catch(console.error);
+    };
+  }, [desktop, setValue]);
+
+  const saveShortcut = async (
+    nextValue: string,
+    successMessage = 'Shortcut saved.',
+  ) => {
+    setLoading(true);
+    setIsRecording(false);
+    try {
+      const saved = desktop
+        ? (await saveDesktopShortcut(nextValue)).shortcut
+        : nextValue;
+      if (!desktop) localStorage.setItem(field.key, saved);
+      setValue(saved);
+      emitClientConfigChanged();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(String(error));
+      toast.error('Could not save shortcut. The previous shortcut is kept.');
+    } finally {
+      await setDesktopShortcutRecording(false).catch((error) => {
+        setMessage(String(error));
+      });
+      setLoading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    if (loading || connectionError || isRecording) return;
+    setLoading(true);
+    try {
+      await setDesktopShortcutRecording(true);
+      if (
+        document.activeElement !== recordingButton.current ||
+        !document.hasFocus()
+      ) {
+        await setDesktopShortcutRecording(false);
+        return;
+      }
+      setIsRecording(true);
+      setMessage('');
+    } catch (error) {
+      setMessage(String(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelRecording = () => {
+    setIsRecording(false);
+    setMessage('Shortcut recording cancelled.');
+    void setDesktopShortcutRecording(false).catch((error) =>
+      setMessage(String(error)),
+    );
+  };
+
+  useEffect(() => {
+    if (!isRecording) return;
+    const cancelOnWindowBlur = () => {
+      setIsRecording(false);
+      setMessage('Shortcut recording cancelled.');
+      void setDesktopShortcutRecording(false).catch((error) =>
+        setMessage(String(error)),
+      );
+    };
+    window.addEventListener('blur', cancelOnWindowBlur);
+    return () => window.removeEventListener('blur', cancelOnWindowBlur);
+  }, [isRecording]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!isRecording || loading) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat) return;
+    if (event.key === 'Escape') {
+      cancelRecording();
+      return;
+    }
+
+    const nextShortcut = shortcutFromEvent(event.nativeEvent);
+    if (!nextShortcut) {
+      setMessage('Include Ctrl, Alt, Shift, or Meta with another key.');
+      return;
+    }
+
+    void saveShortcut(nextShortcut);
+  };
+
+  return (
+    <section className="rounded-xl border border-light-200 bg-light-primary/80 p-4 lg:p-6 transition-colors dark:border-dark-200 dark:bg-dark-primary/80">
+      <div className="space-y-3 lg:space-y-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-4 w-4 text-black/50 dark:text-white/50" />
+            <h4 className="text-sm text-black dark:text-white">{field.name}</h4>
+            {desktop && (
+              <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-500">
+                Global
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] lg:text-xs text-black/50 dark:text-white/50">
+            {desktop
+              ? 'Open Vane with a fresh chat from anywhere on your computer. This is the same New question shortcut, including while Vane is focused.'
+              : field.description}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            ref={recordingButton}
+            type="button"
+            onClick={() => void startRecording()}
+            onBlur={() => {
+              if (isRecording) cancelRecording();
+            }}
+            onKeyDown={handleKeyDown}
+            aria-disabled={loading || connectionError}
+            data-shortcut-setting="new-question"
+            aria-pressed={isRecording}
+            className={cn(
+              'flex min-h-11 flex-1 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+              isRecording
+                ? 'border-blue-500 ring-2 ring-blue-500/20'
+                : 'border-light-200 dark:border-dark-200 hover:border-light-300 dark:hover:border-dark-300',
+            )}
+          >
+            <span
+              className={
+                isRecording
+                  ? 'text-blue-500'
+                  : 'text-black/80 dark:text-white/80'
+              }
+            >
+              {loading
+                ? 'Connecting…'
+                : connectionError
+                  ? 'Desktop connection unavailable'
+                  : isRecording
+                    ? 'Press a key combination…'
+                    : shortcut}
+            </span>
+            <span className="text-[11px] text-black/40 dark:text-white/40">
+              {isRecording ? 'Esc to cancel' : 'Change'}
+            </span>
+          </button>
+          <button
+            type="button"
+            disabled={loading || connectionError}
+            onClick={() =>
+              void saveShortcut(defaultShortcut, 'Default shortcut restored.')
+            }
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-light-200 px-3 py-2 text-xs text-black/70 transition-colors hover:bg-light-200 dark:border-dark-200 dark:text-white/70 dark:hover:bg-dark-200"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Reset
+          </button>
+        </div>
+        {connectionError && (
+          <button
+            type="button"
+            className="text-xs text-blue-500"
+            onClick={() =>
+              window.dispatchEvent(new Event('desktop-shortcut-changed'))
+            }
+          >
+            Retry connection
+          </button>
+        )}
+        <p
+          aria-live="polite"
+          className="min-h-4 text-[11px] text-black/45 dark:text-white/45"
+        >
+          {message ||
+            'Use a modifier plus a key. Press Esc while recording to keep the current shortcut.'}
+        </p>
       </div>
     </section>
   );
@@ -602,6 +834,8 @@ const SettingsField = ({
           dataAdd={dataAdd}
         />
       );
+    case 'shortcut':
+      return <SettingsShortcut field={field} value={val} setValue={setVal} />;
     case 'textarea':
       return (
         <SettingsTextarea

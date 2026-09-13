@@ -230,6 +230,16 @@ If you wish to use Vane as an alternative to traditional search engines like Goo
 3. Add a new site search with the following URL: `http://localhost:3000/?q=%s`. Replace `localhost` with your IP address or domain name, and `3000` with the port number if Vane is not hosted locally.
 4. Click the add button. Now, you can use Vane directly from your browser's search bar.
 
+## Desktop App (Global Shortcut)
+
+Want Vane one keystroke away like a launcher? The [desktop shell](desktop/README.md) wraps your self-hosted instance in a small native window (Tauri) with a **global shortcut** (`Alt+Shift+Space` by default), a tray icon and close-to-tray. It connects to an existing Vane server, so run Vane as usual and point the app at it.
+
+```bash
+cd desktop
+npm install
+npm run dev     # or `npm run build` for installers
+```
+
 ## Using Vane's API
 
 Vane also provides an API for developers looking to integrate its powerful search engine into their own applications. You can run searches, use multiple models and get answers to your queries.

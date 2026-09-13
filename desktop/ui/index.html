@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vane — Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0a0a0a;
+        --fg: #f5f5f5;
+        --muted: #a3a3a3;
+        --border: #262626;
+        --field: #171717;
+        --accent: #24a0ed;
+        --danger: #f87171;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #ffffff;
+          --fg: #0a0a0a;
+          --muted: #737373;
+          --border: #e5e5e5;
+          --field: #f5f5f5;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px 28px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      p.lead {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 6px 0 18px;
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--field);
+        color: var(--fg);
+        font: inherit;
+        outline: none;
+      }
+      input:focus {
+        border-color: var(--accent);
+      }
+      .shortcut-control {
+        width: 100%;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--field);
+        color: var(--fg);
+        font: inherit;
+        font-weight: 400;
+        text-align: left;
+      }
+      .shortcut-control:hover {
+        border-color: var(--muted);
+      }
+      .shortcut-control.recording {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+      }
+      .shortcut-action {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .secondary {
+        background: var(--field);
+        border: 1px solid var(--border);
+        color: var(--fg);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      button {
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      #status {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      #status.error {
+        color: var(--danger);
+      }
+      kbd {
+        padding: 1px 5px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--field);
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Vane Desktop</h1>
+    <p class="lead">Connect to Vane and customize how you open a fresh chat.</p>
+
+    <form id="form">
+      <label for="serverUrl">Server URL</label>
+      <input
+        id="serverUrl"
+        type="url"
+        placeholder="http://localhost:3000"
+        autocomplete="off"
+        spellcheck="false"
+        required
+      />
+      <p class="hint">
+        Where Vane is running (the same address you open in the browser).
+      </p>
+
+      <label for="shortcut">New question (global)</label>
+      <button
+        id="shortcut"
+        class="shortcut-control"
+        type="button"
+        aria-describedby="shortcutHint shortcutStatus"
+      >
+        <span id="shortcutValue">Alt+Shift+Space</span
+        ><span class="shortcut-action">Change</span>
+      </button>
+      <p class="hint" id="shortcutHint">
+        Press this anywhere on your computer to open Vane with a fresh chat.
+        Click it, then press a modifier (<kbd>Ctrl</kbd>, <kbd>Alt</kbd>,
+        <kbd>Shift</kbd>, or <kbd>Super</kbd>/<kbd>Cmd</kbd>) and a key.
+      </p>
+      <p class="hint" id="shortcutStatus" role="status">
+        Click Change to record a new shortcut.
+      </p>
+
+      <div class="row">
+        <button id="save" type="submit">Save &amp; connect</button>
+        <button id="resetShortcut" class="secondary" type="button">
+          Reset shortcut
+        </button>
+        <span id="status"></span>
+      </div>
+    </form>
+
+    <script>
+      const { invoke } = window.__TAURI__.core;
+
+      const form = document.getElementById('form');
+      const serverUrl = document.getElementById('serverUrl');
+      const shortcut = document.getElementById('shortcut');
+      const shortcutValue = document.getElementById('shortcutValue');
+      const shortcutStatus = document.getElementById('shortcutStatus');
+      const resetShortcut = document.getElementById('resetShortcut');
+      const save = document.getElementById('save');
+      const status = document.getElementById('status');
+
+      const setStatus = (text, isError = false) => {
+        status.textContent = text;
+        status.classList.toggle('error', isError);
+      };
+
+      const DEFAULT_SHORTCUT = 'Alt+Shift+Space';
+      let shortcutValueToSave = DEFAULT_SHORTCUT;
+      let recordingShortcut = false;
+
+      const renderShortcut = () => {
+        shortcutValue.textContent = recordingShortcut
+          ? 'Press a key combination…'
+          : shortcutValueToSave;
+        shortcut.querySelector('.shortcut-action').textContent =
+          recordingShortcut ? 'Esc to cancel' : 'Change';
+        shortcut.classList.toggle('recording', recordingShortcut);
+        shortcut.setAttribute('aria-pressed', String(recordingShortcut));
+      };
+
+      const keyFromEvent = (event) => {
+        if (event.code === 'Space') return 'Space';
+        if (event.code.startsWith('Key'))
+          return event.code.slice(3).toUpperCase();
+        if (event.code.startsWith('Digit')) return event.code.slice(5);
+        if (/^F\d{1,2}$/.test(event.key)) return event.key.toUpperCase();
+        if (
+          event.key === 'Enter' ||
+          event.key === 'Tab' ||
+          event.key === 'Escape'
+        )
+          return event.key;
+        return event.code || event.key;
+      };
+
+      const stopRecording = () => {
+        recordingShortcut = false;
+        renderShortcut();
+        invoke('set_shortcut_recording', { recording: false }).catch((error) =>
+          setStatus(String(error), true),
+        );
+      };
+
+      shortcut.addEventListener('click', async () => {
+        try {
+          await invoke('set_shortcut_recording', { recording: true });
+          if (document.activeElement !== shortcut || !document.hasFocus()) {
+            await invoke('set_shortcut_recording', { recording: false });
+            return;
+          }
+        } catch (error) {
+          setStatus(String(error), true);
+          return;
+        }
+        recordingShortcut = true;
+        shortcutStatus.textContent =
+          'Press a modifier and another key. Press Escape to cancel.';
+        renderShortcut();
+        shortcut.focus();
+      });
+
+      shortcut.addEventListener('keydown', (event) => {
+        if (!recordingShortcut) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        if (event.key === 'Escape') {
+          stopRecording();
+          shortcutStatus.textContent = 'Shortcut recording cancelled.';
+          renderShortcut();
+          return;
+        }
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) {
+          shortcutStatus.textContent = 'Include a non-modifier key too.';
+          return;
+        }
+        const modifiers = [
+          event.ctrlKey && 'Ctrl',
+          event.altKey && 'Alt',
+          event.shiftKey && 'Shift',
+          event.metaKey && 'Super',
+        ].filter(Boolean);
+        if (!modifiers.length) {
+          shortcutStatus.textContent =
+            'Include Ctrl, Alt, Shift, or Super/Cmd with another key.';
+          return;
+        }
+        shortcutValueToSave = [...modifiers, keyFromEvent(event)].join('+');
+        stopRecording();
+        shortcutStatus.textContent = 'Shortcut recorded. Save to apply it.';
+        renderShortcut();
+      });
+
+      resetShortcut.addEventListener('click', () => {
+        shortcutValueToSave = DEFAULT_SHORTCUT;
+        stopRecording();
+        shortcutStatus.textContent =
+          'Default shortcut restored. Save to apply it.';
+        renderShortcut();
+      });
+
+      shortcut.addEventListener('blur', () => {
+        if (recordingShortcut) stopRecording();
+      });
+      window.addEventListener('blur', () => {
+        if (recordingShortcut) stopRecording();
+      });
+      window.addEventListener('desktop-shortcut-changed', async () => {
+        try {
+          const settings = await invoke('get_settings');
+          shortcutValueToSave = settings.shortcut;
+          renderShortcut();
+        } catch (error) {
+          setStatus(String(error), true);
+        }
+      });
+
+      invoke('get_settings')
+        .then((settings) => {
+          serverUrl.value = settings.serverUrl || 'http://localhost:3000';
+          shortcutValueToSave = settings.shortcut || DEFAULT_SHORTCUT;
+          renderShortcut();
+          serverUrl.focus();
+        })
+        .catch((err) => setStatus(String(err), true));
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        save.disabled = true;
+        setStatus('Saving…');
+        try {
+          await invoke('save_settings', {
+            settings: {
+              serverUrl: serverUrl.value,
+              shortcut: shortcutValueToSave,
+            },
+          });
+          setStatus('Connected.');
+        } catch (err) {
+          setStatus(String(err), true);
+        } finally {
+          save.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

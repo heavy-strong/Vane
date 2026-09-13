@@ -21,52 +21,14 @@ import {
   DialogTitle,
 } from '@headlessui/react';
 import SettingsButton from './Settings/SettingsButton';
+import { shortcutMatches } from '@/lib/shortcuts';
+import { isDesktop } from '@/lib/desktop';
 
 const VerticalIconContainer = ({ children }: { children: ReactNode }) => {
   return <div className="flex flex-col items-center w-full">{children}</div>;
 };
 
 const DEFAULT_NEW_QUESTION_SHORTCUT = 'Ctrl+Alt+N';
-
-const shortcutMatches = (event: KeyboardEvent, shortcut: string) => {
-  const parts = shortcut
-    .toLowerCase()
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const key = parts.at(-1);
-
-  if (!key || parts.length < 2) return false;
-
-  const modifiers = new Set(parts.slice(0, -1));
-  const wantsCtrl = modifiers.has('ctrl') || modifiers.has('control');
-  const wantsMeta =
-    modifiers.has('meta') || modifiers.has('cmd') || modifiers.has('command');
-  const wantsAlt = modifiers.has('alt') || modifiers.has('option');
-  const wantsShift = modifiers.has('shift');
-
-  if (
-    event.ctrlKey !== wantsCtrl ||
-    event.metaKey !== wantsMeta ||
-    event.altKey !== wantsAlt ||
-    event.shiftKey !== wantsShift
-  ) {
-    return false;
-  }
-
-  const normalizedKey = key === 'space' ? ' ' : key;
-  if (event.key.toLowerCase() === normalizedKey) return true;
-
-  if (/^[a-z]$/.test(normalizedKey)) {
-    return event.code === `Key${normalizedKey.toUpperCase()}`;
-  }
-
-  if (/^\d$/.test(normalizedKey)) {
-    return event.code === `Digit${normalizedKey}`;
-  }
-
-  return false;
-};
 
 const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const segments = useSelectedLayoutSegments();
@@ -95,6 +57,8 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // In the desktop app the native global shortcut owns this action.
+      if (isDesktop()) return;
       if (
         document.activeElement?.getAttribute('data-shortcut-setting') ===
           'new-question' ||

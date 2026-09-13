@@ -15,6 +15,11 @@ type StringUIConfigField = BaseUIConfigField & {
   default?: string;
 };
 
+type ShortcutUIConfigField = BaseUIConfigField & {
+  type: 'shortcut';
+  default?: string;
+};
+
 type SelectUIConfigFieldOptions = {
   name: string;
   value: string;
@@ -53,6 +58,7 @@ type EnginesUIConfigField = BaseUIConfigField & {
 
 type UIConfigField =
   | StringUIConfigField
+  | ShortcutUIConfigField
   | SelectUIConfigField
   | PasswordUIConfigField
   | TextareaUIConfigField
@@ -101,6 +107,7 @@ type ModelProviderUISection = {
 
 type UIConfigSections = {
   preferences: UIConfigField[];
+  shortcuts: UIConfigField[];
   personalization: UIConfigField[];
   modelProviders: ModelProviderUISection[];
   search: UIConfigField[];
@@ -113,6 +120,7 @@ export type {
   UIConfigSections,
   SelectUIConfigField,
   StringUIConfigField,
+  ShortcutUIConfigField,
   ModelProviderUISection,
   ConfigModelProvider,
   TextareaUIConfigField,

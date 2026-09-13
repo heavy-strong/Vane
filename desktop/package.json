@@ -1,0 +1,16 @@
+{
+  "name": "vane-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin desktop shell for a self-hosted Vane instance with a global shortcut and tray icon.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icon": "tauri icon ../public/icon.png",
+    "test:shortcuts": "node tests/shortcut-settings.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
+}
