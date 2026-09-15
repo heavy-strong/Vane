@@ -12,6 +12,7 @@ import Loader from './ui/Loader';
 import {
   decodeUrlsInText,
   isDecodeCitationUrlsEnabled,
+  safeDecodeURI,
 } from '@/lib/utils/urlDecode';
 
 export interface BaseMessage {
@@ -41,6 +42,32 @@ export interface Widget {
   params: Record<string, any>;
 }
 
+// WebKit (Safari, and the WKWebView behind the macOS desktop app) sanitizes
+// any `text/html` written during a copy event by re-parsing and re-serializing
+// it, which canonicalizes every href back to its percent-encoded form. There
+// is no way to get a decoded URL onto a WebKit pasteboard through HTML - only
+// `text/plain` is written verbatim. (Measured with a WKWebView harness; the
+// DOM href being decoded doesn't help either, native serialization re-encodes
+// it too.) Rich-text targets like Obsidian/Notion prefer `text/html` when it
+// is present, so on WebKit we omit it and let them fall through to the plain
+// text, which carries the links in markdown form.
+const isWebKit = () =>
+  /AppleWebKit/i.test(navigator.userAgent) &&
+  !/Chrome|Chromium|CriOS|Edg|OPR|Firefox/i.test(navigator.userAgent);
+
+/** Layout-aware text of a detached fragment (`innerText` needs rendering,
+ * `textContent` loses the line breaks between block elements). */
+const renderedText = (container: HTMLElement) => {
+  container.style.cssText =
+    'position:fixed;top:0;left:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+  document.body.appendChild(container);
+  try {
+    return container.innerText;
+  } finally {
+    container.remove();
+  }
+};
+
 // When a user selects rendered content (e.g. a citation link) and copies it
 // natively (drag-select + Ctrl+C), the clipboard would otherwise contain the
 // raw percent-encoded URL. Intercept the copy event and decode any URLs in
@@ -63,17 +90,12 @@ const useDecodeCopiedUrls = () => {
       // dragging over a citation number like "[1]" - so the underlying href
       // must be decoded too, not just the visible text.
       const fragment = selection.getRangeAt(0).cloneContents();
-      const anchors = fragment.querySelectorAll('a[href]');
-      let hrefChanged = false;
+      const anchors = Array.from(fragment.querySelectorAll('a[href]'));
       anchors.forEach((a) => {
         const href = a.getAttribute('href');
         if (!href) return;
         try {
-          const decodedHref = decodeURI(href);
-          if (decodedHref !== href) {
-            a.setAttribute('href', decodedHref);
-            hrefChanged = true;
-          }
+          a.setAttribute('href', decodeURI(href));
         } catch {
           // leave malformed URIs untouched
         }
@@ -81,14 +103,29 @@ const useDecodeCopiedUrls = () => {
 
       const decodedText = decodeUrlsInText(text);
 
-      if (!hrefChanged && decodedText === text) return;
+      if (anchors.length === 0 && decodedText === text) return;
       if (!e.clipboardData) return;
 
       const container = document.createElement('div');
       container.appendChild(fragment);
+      const html = container.innerHTML;
 
-      e.clipboardData.setData('text/plain', decodedText);
-      e.clipboardData.setData('text/html', container.innerHTML);
+      // Plain text gets the links inline as markdown - `[15](url)` - the same
+      // shape the Copy button produces, so plain-text and WebKit targets keep
+      // the (decoded) URL instead of just a bare citation number.
+      let plain = decodedText;
+      if (anchors.length > 0) {
+        anchors.forEach((a) => {
+          const href = a.getAttribute('href') ?? '';
+          const label = safeDecodeURI(a.textContent?.trim() ?? '');
+          a.textContent =
+            !label || label === href ? href : `[${label}](${href})`;
+        });
+        plain = decodeUrlsInText(renderedText(container));
+      }
+
+      e.clipboardData.setData('text/plain', plain);
+      if (!isWebKit()) e.clipboardData.setData('text/html', html);
       e.preventDefault();
     };
 
