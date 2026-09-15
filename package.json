@@ -4,9 +4,9 @@
   "license": "MIT",
   "author": "ItzCrazyKns",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3847",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "next start -p 3847",
     "lint": "eslint .",
     "format:write": "prettier . --write",
     "playwright:install": "playwright install --only-shell chromium"
