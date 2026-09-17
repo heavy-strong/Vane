@@ -96,7 +96,12 @@ fn allow_server_shortcut_access(app: &AppHandle, url: &Url) -> tauri::Result<()>
                 "allow-set-shortcut-recording",
                 scope,
                 Vec::<ServerScope>::new(),
-            ),
+            )
+            // Citation links come from the configured Vane server. Permit it
+            // to hand http(s) URLs to the OS default browser, but only from
+            // that server origin and only in the main window.
+            .permission("opener:allow-open-url")
+            .permission("opener:allow-default-urls"),
     )?;
     origins.insert(origin);
     Ok(())
@@ -450,6 +455,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
