@@ -72,6 +72,10 @@ const ModelProvider = ({
     }
   };
 
+  const catalogBacked =
+    modelProvider.catalogBacked ||
+    modelProvider.type === 'openrouter' ||
+    String(modelProvider.config?.baseURL ?? '').includes('openrouter.ai');
   const modelCount =
     modelProvider.chatModels.filter((m) => m.key !== 'error').length +
     modelProvider.embeddingModels.filter((m) => m.key !== 'error').length;
@@ -93,9 +97,11 @@ const ModelProvider = ({
             <p className="text-sm lg:text-sm text-black dark:text-white font-medium">
               {modelProvider.name}
             </p>
-            {modelCount > 0 && (
+            {(catalogBacked || modelCount > 0) && !hasError && (
               <p className="text-[10px] lg:text-[11px] text-black/50 dark:text-white/50">
-                {modelCount} model{modelCount !== 1 ? 's' : ''} configured
+                {catalogBacked
+                  ? 'All models available in the picker'
+                  : `${modelCount} model${modelCount !== 1 ? 's' : ''} configured`}
               </p>
             )}
           </div>
@@ -118,18 +124,25 @@ const ModelProvider = ({
             <p className="text-[11px] lg:text-[11px] font-medium text-black/70 dark:text-white/70 uppercase tracking-wide">
               Chat Models
             </p>
-            {!modelProvider.chatModels.some((m) => m.key === 'error') && (
-              <AddModel
-                providerId={modelProvider.id}
-                providerType={modelProvider.type}
-                existingModels={modelProvider.chatModels}
-                setProviders={setProviders}
-                type="chat"
-              />
-            )}
+            {!catalogBacked &&
+              !modelProvider.chatModels.some((m) => m.key === 'error') && (
+                <AddModel
+                  providerId={modelProvider.id}
+                  providerType={modelProvider.type}
+                  existingModels={modelProvider.chatModels}
+                  setProviders={setProviders}
+                  type="chat"
+                />
+              )}
           </div>
           <div className="flex flex-col gap-2">
-            {modelProvider.chatModels.some((m) => m.key === 'error') ? (
+            {catalogBacked &&
+            !modelProvider.chatModels.some((m) => m.key === 'error') ? (
+              <p className="text-xs text-black/50 dark:text-white/50">
+                Every OpenRouter chat model is listed in the model picker.
+                Search there and star a result to pin it.
+              </p>
+            ) : modelProvider.chatModels.some((m) => m.key === 'error') ? (
               <div className="flex flex-row items-center gap-2 text-xs lg:text-xs text-red-500 dark:text-red-400 rounded-lg bg-red-50 dark:bg-red-950/20 px-3 py-2 border border-red-200 dark:border-red-900/30">
                 <AlertCircle size={16} className="shrink-0" />
                 <span className="break-words">
@@ -175,18 +188,25 @@ const ModelProvider = ({
             <p className="text-[11px] lg:text-[11px] font-medium text-black/70 dark:text-white/70 uppercase tracking-wide">
               Embedding Models
             </p>
-            {!modelProvider.embeddingModels.some((m) => m.key === 'error') && (
-              <AddModel
-                providerId={modelProvider.id}
-                providerType={modelProvider.type}
-                existingModels={modelProvider.embeddingModels}
-                setProviders={setProviders}
-                type="embedding"
-              />
-            )}
+            {!catalogBacked &&
+              !modelProvider.embeddingModels.some((m) => m.key === 'error') && (
+                <AddModel
+                  providerId={modelProvider.id}
+                  providerType={modelProvider.type}
+                  existingModels={modelProvider.embeddingModels}
+                  setProviders={setProviders}
+                  type="embedding"
+                />
+              )}
           </div>
           <div className="flex flex-col gap-2">
-            {modelProvider.embeddingModels.some((m) => m.key === 'error') ? (
+            {catalogBacked &&
+            !modelProvider.embeddingModels.some((m) => m.key === 'error') ? (
+              <p className="text-xs text-black/50 dark:text-white/50">
+                Every OpenRouter embedding model is available in the embedding
+                picker. Search the list to choose one.
+              </p>
+            ) : modelProvider.embeddingModels.some((m) => m.key === 'error') ? (
               <div className="flex flex-row items-center gap-2 text-xs lg:text-xs text-red-500 dark:text-red-400 rounded-lg bg-red-50 dark:bg-red-950/20 px-3 py-2 border border-red-200 dark:border-red-900/30">
                 <AlertCircle size={16} className="shrink-0" />
                 <span className="break-words">

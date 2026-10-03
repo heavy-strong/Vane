@@ -73,6 +73,7 @@ type ConfigModelProvider = {
   embeddingModels: Model[];
   disabledChatModelKeys?: string[];
   disabledEmbeddingModelKeys?: string[];
+  catalogBacked?: boolean;
   config: { [key: string]: any };
   hash: string;
 };

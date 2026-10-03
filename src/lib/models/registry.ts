@@ -2,6 +2,7 @@ import { ConfigModelProvider } from '../config/types';
 import BaseModelProvider, { createProviderInstance } from './base/provider';
 import { getConfiguredModelProviders } from '../config/serverRegistry';
 import { providers } from './providers';
+import { isOpenRouterBaseURL } from './providers/openrouter';
 import { GenerateOptions, MinimalProvider, ModelList } from './types';
 import configManager from '../config';
 
@@ -65,6 +66,9 @@ class ModelRegistry {
           id: p.id,
           name: p.name,
           type: p.type,
+          catalogBacked:
+            p.type === 'openrouter' ||
+            isOpenRouterBaseURL(String(p.config?.baseURL ?? '')),
           chatModels: uniqueModels(m.chat),
           embeddingModels: uniqueModels(m.embedding),
         };

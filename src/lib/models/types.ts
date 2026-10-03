@@ -42,6 +42,7 @@ type MinimalProvider = {
   id: string;
   name: string;
   type?: string;
+  catalogBacked?: boolean;
   chatModels: Model[];
   embeddingModels: Model[];
 };

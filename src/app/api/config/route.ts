@@ -25,6 +25,7 @@ export const GET = async (req: NextRequest) => {
 
         return {
           ...mp,
+          catalogBacked: activeProvider?.catalogBacked ?? mp.catalogBacked,
           chatModels: activeProvider?.chatModels ?? mp.chatModels,
           embeddingModels:
             activeProvider?.embeddingModels ?? mp.embeddingModels,

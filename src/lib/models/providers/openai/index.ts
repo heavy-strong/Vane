@@ -1,6 +1,7 @@
 import { UIConfigField } from '@/lib/config/types';
 import { getConfiguredModelProviderById } from '@/lib/config/serverRegistry';
 import { Model, ModelList, ProviderMetadata } from '../../types';
+import { getOpenRouterModelList, isOpenRouterBaseURL } from '../openrouter';
 import OpenAIEmbedding from './openaiEmbedding';
 import BaseEmbedding from '../../base/embedding';
 import BaseModelProvider from '../../base/provider';
@@ -150,6 +151,26 @@ class OpenAIProvider extends BaseModelProvider<OpenAIConfig> {
   }
 
   async getModelList(): Promise<ModelList> {
+    if (isOpenRouterBaseURL(this.config.baseURL)) {
+      try {
+        return await getOpenRouterModelList(this.config.apiKey);
+      } catch (error) {
+        const configured = getConfiguredModelProviderById(this.id);
+        if (
+          configured &&
+          (configured.chatModels.length > 0 ||
+            configured.embeddingModels.length > 0)
+        ) {
+          return {
+            chat: configured.chatModels,
+            embedding: configured.embeddingModels,
+          };
+        }
+
+        throw error;
+      }
+    }
+
     const defaultModels = await this.getDefaultModels();
     const configProvider = getConfiguredModelProviderById(this.id)!;
 

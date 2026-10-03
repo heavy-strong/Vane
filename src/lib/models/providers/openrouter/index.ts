@@ -51,70 +51,85 @@ const providerConfigFields: UIConfigField[] = [
   },
 ];
 
-class OpenRouterProvider extends BaseModelProvider<OpenRouterConfig> {
-  async getDefaultModels(): Promise<ModelList> {
-    let models = modelCache?.models;
+export const isOpenRouterBaseURL = (baseURL?: string) =>
+  !!baseURL?.includes('openrouter.ai');
 
-    if (!models || modelCache!.expiresAt <= Date.now()) {
-      const response = await fetch(
-        'https://openrouter.ai/api/v1/models?output_modalities=all',
-        {
-          headers: { Authorization: `Bearer ${this.config.apiKey}` },
-          signal: AbortSignal.timeout(10_000),
-        },
+export async function getOpenRouterModelList(
+  apiKey: string,
+): Promise<ModelList> {
+  let models = modelCache?.models;
+
+  if (!models || modelCache!.expiresAt <= Date.now()) {
+    const response = await fetch(
+      'https://openrouter.ai/api/v1/models?output_modalities=all',
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `OpenRouter model list request failed (${response.status})`,
       );
-
-      if (!response.ok) {
-        throw new Error(
-          `OpenRouter model list request failed (${response.status})`,
-        );
-      }
-
-      const payload = (await response.json()) as { data?: OpenRouterModel[] };
-      models = payload.data ?? [];
-      modelCache = { models, expiresAt: Date.now() + MODEL_CACHE_TTL_MS };
     }
 
-    const toModel = (model: OpenRouterModel): Model => ({
-      key: model.id,
-      name: model.name || model.id,
-      description: model.description,
-      contextLength: model.context_length,
-      pricing: model.pricing,
-      reasoning: model.reasoning
-        ? {
-            supportedEfforts: model.reasoning.supported_efforts,
-            defaultEffort: model.reasoning.default_effort,
-            defaultEnabled: model.reasoning.default_enabled,
-            mandatory: model.reasoning.mandatory,
-            supportsMaxTokens: model.reasoning.supports_max_tokens,
-          }
-        : undefined,
-    });
-    const chat = models
-      .filter((model) =>
-        model.architecture?.output_modalities?.includes('text'),
-      )
-      .map(toModel);
-    const embedding = models
-      .filter((model) =>
-        model.architecture?.output_modalities?.includes('embeddings'),
-      )
-      .map(toModel);
+    const payload = (await response.json()) as { data?: OpenRouterModel[] };
+    models = payload.data ?? [];
+    modelCache = { models, expiresAt: Date.now() + MODEL_CACHE_TTL_MS };
+  }
 
-    return { chat, embedding };
+  const toModel = (model: OpenRouterModel): Model => ({
+    key: model.id,
+    name: model.name || model.id,
+    description: model.description,
+    contextLength: model.context_length,
+    pricing: model.pricing,
+    reasoning: model.reasoning
+      ? {
+          supportedEfforts: model.reasoning.supported_efforts,
+          defaultEffort: model.reasoning.default_effort,
+          defaultEnabled: model.reasoning.default_enabled,
+          mandatory: model.reasoning.mandatory,
+          supportsMaxTokens: model.reasoning.supports_max_tokens,
+        }
+      : undefined,
+  });
+  const chat = models
+    .filter((model) => model.architecture?.output_modalities?.includes('text'))
+    .map(toModel);
+  const embedding = models
+    .filter((model) =>
+      model.architecture?.output_modalities?.includes('embeddings'),
+    )
+    .map(toModel);
+
+  return { chat, embedding };
+}
+
+class OpenRouterProvider extends BaseModelProvider<OpenRouterConfig> {
+  async getDefaultModels(): Promise<ModelList> {
+    return getOpenRouterModelList(this.config.apiKey);
   }
 
   async getModelList(): Promise<ModelList> {
-    const configured = getConfiguredModelProviderById(this.id)!;
-    return {
-      chat: configured.chatModels.filter(
-        (model) => !configured.disabledChatModelKeys?.includes(model.key),
-      ),
-      embedding: configured.embeddingModels.filter(
-        (model) => !configured.disabledEmbeddingModelKeys?.includes(model.key),
-      ),
-    };
+    try {
+      return await this.getDefaultModels();
+    } catch (error) {
+      const configured = getConfiguredModelProviderById(this.id);
+      if (
+        configured &&
+        (configured.chatModels.length > 0 ||
+          configured.embeddingModels.length > 0)
+      ) {
+        return {
+          chat: configured.chatModels,
+          embedding: configured.embeddingModels,
+        };
+      }
+
+      throw error;
+    }
   }
 
   async getModelCatalog(): Promise<ModelList> {
