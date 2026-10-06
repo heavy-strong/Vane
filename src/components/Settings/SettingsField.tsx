@@ -21,6 +21,7 @@ import {
   saveDesktopShortcut,
   setDesktopShortcutRecording,
 } from '@/lib/desktop';
+import { setPreference } from '@/lib/preferences/client';
 
 const emitClientConfigChanged = () => {
   if (typeof window !== 'undefined') {
@@ -47,7 +48,7 @@ const SettingsSelect = ({
     setValue(newValue);
     try {
       if (field.scope === 'client') {
-        localStorage.setItem(field.key, newValue);
+        setPreference(field.key, newValue);
         if (field.key === 'theme') {
           setTheme(newValue);
         }
@@ -122,7 +123,7 @@ const SettingsInput = ({
     setValue(newValue);
     try {
       if (field.scope === 'client') {
-        localStorage.setItem(field.key, newValue);
+        setPreference(field.key, newValue);
         emitClientConfigChanged();
       } else {
         const res = await fetch('/api/config', {
@@ -426,7 +427,7 @@ const SettingsTextarea = ({
     setValue(newValue);
     try {
       if (field.scope === 'client') {
-        localStorage.setItem(field.key, newValue);
+        setPreference(field.key, newValue);
         emitClientConfigChanged();
       } else {
         const res = await fetch('/api/config', {
@@ -503,7 +504,7 @@ const SettingsSwitch = ({
     setValue(newValue);
     try {
       if (field.scope === 'client') {
-        localStorage.setItem(field.key, String(newValue));
+        setPreference(field.key, String(newValue));
         emitClientConfigChanged();
       } else {
         const res = await fetch('/api/config', {

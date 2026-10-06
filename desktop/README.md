@@ -42,6 +42,10 @@ The [Tauri capability system](https://tauri.app/security/capabilities/) grants t
 | macOS   | `~/Library/Application Support/app.vane.desktop/settings.json` |
 | Linux   | `~/.config/app.vane.desktop/settings.json`                     |
 
+## Settings shared with the browser
+
+Vane settings such as the theme, the selected model and favorite models are stored by the Vane server (`data/preferences.json`), not in the webview. The desktop app and any browser connected to the same server show the same settings, and a change in one appears in the others right away. The New question shortcut is the exception: the desktop app keeps its global shortcut natively.
+
 ## Building installers
 
 To run the browser integration checks against a local Vane development server, use `npm run test:shortcuts -- http://localhost:3000` from `desktop/`. These checks simulate the Tauri transport and cover the web settings without changing native or server configuration.

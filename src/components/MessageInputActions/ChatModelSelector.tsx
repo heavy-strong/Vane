@@ -14,6 +14,7 @@ import {
 import { MinimalProvider, Model, ReasoningEffort } from '@/lib/models/types';
 import { useChat } from '@/lib/hooks/useChat';
 import { AnimatePresence, motion } from 'motion/react';
+import { removePreference, setPreference } from '@/lib/preferences/client';
 
 const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
   const [providers, setProviders] = useState<MinimalProvider[]>([]);
@@ -105,16 +106,16 @@ const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
           chatModelProviderRef.current = nextChat;
           setChatModelProvider(nextChat);
           if (fallbackModel) {
-            localStorage.setItem('chatModelProviderId', nextChat.providerId);
-            localStorage.setItem('chatModelKey', nextChat.key);
+            setPreference('chatModelProviderId', nextChat.providerId);
+            setPreference('chatModelKey', nextChat.key);
           } else {
-            localStorage.removeItem('chatModelProviderId');
-            localStorage.removeItem('chatModelKey');
+            removePreference('chatModelProviderId');
+            removePreference('chatModelKey');
           }
           setChatThinkingEnabled(undefined);
           setChatReasoningEffort(undefined);
-          localStorage.removeItem('chatThinkingEnabled');
-          localStorage.removeItem('chatReasoningEffort');
+          removePreference('chatThinkingEnabled');
+          removePreference('chatReasoningEffort');
         }
 
         const currentEmbedding = embeddingModelProviderRef.current;
@@ -137,14 +138,11 @@ const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
           embeddingModelProviderRef.current = nextEmbedding;
           setEmbeddingModelProvider(nextEmbedding);
           if (fallbackModel) {
-            localStorage.setItem(
-              'embeddingModelProviderId',
-              nextEmbedding.providerId,
-            );
-            localStorage.setItem('embeddingModelKey', nextEmbedding.key);
+            setPreference('embeddingModelProviderId', nextEmbedding.providerId);
+            setPreference('embeddingModelKey', nextEmbedding.key);
           } else {
-            localStorage.removeItem('embeddingModelProviderId');
-            localStorage.removeItem('embeddingModelKey');
+            removePreference('embeddingModelProviderId');
+            removePreference('embeddingModelKey');
           }
         }
       } catch (error) {
@@ -188,8 +186,8 @@ const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
 
   const handleModelSelect = (providerId: string, modelKey: string) => {
     setChatModelProvider({ providerId, key: modelKey });
-    localStorage.setItem('chatModelProviderId', providerId);
-    localStorage.setItem('chatModelKey', modelKey);
+    setPreference('chatModelProviderId', providerId);
+    setPreference('chatModelKey', modelKey);
 
     const model = providers
       .find((provider) => provider.id === providerId)
@@ -199,11 +197,11 @@ const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
       !model?.reasoning?.supportedEfforts?.includes(chatReasoningEffort)
     ) {
       setChatReasoningEffort(undefined);
-      localStorage.removeItem('chatReasoningEffort');
+      removePreference('chatReasoningEffort');
     }
     if (!model?.reasoning) {
       setChatThinkingEnabled(undefined);
-      localStorage.removeItem('chatThinkingEnabled');
+      removePreference('chatThinkingEnabled');
     }
   };
 
@@ -220,15 +218,15 @@ const ModelSelector = ({ align = 'end' }: { align?: 'start' | 'end' }) => {
   const handleEffortChange = (effort: string) => {
     const value = effort ? (effort as ReasoningEffort) : undefined;
     setChatReasoningEffort(value);
-    if (value) localStorage.setItem('chatReasoningEffort', value);
-    else localStorage.removeItem('chatReasoningEffort');
+    if (value) setPreference('chatReasoningEffort', value);
+    else removePreference('chatReasoningEffort');
   };
 
   const handleThinkingChange = (value: string) => {
     const enabled = value === '' ? undefined : value === 'on';
     setChatThinkingEnabled(enabled);
-    if (enabled === undefined) localStorage.removeItem('chatThinkingEnabled');
-    else localStorage.setItem('chatThinkingEnabled', String(enabled));
+    if (enabled === undefined) removePreference('chatThinkingEnabled');
+    else setPreference('chatThinkingEnabled', String(enabled));
   };
 
   const query = searchQuery.trim().toLowerCase();

@@ -16,6 +16,13 @@ import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
 import { MinimalProvider, ReasoningEffort } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
+import {
+  getPreference,
+  PREFERENCES_CHANGED_EVENT,
+  PreferencesChangedDetail,
+  removePreference,
+  setPreference,
+} from '../preferences/client';
 import { applyPatch } from 'rfc6902';
 import { Widget } from '@/components/ChatWindow';
 import { notifyLibraryChanged } from '../library';
@@ -161,10 +168,10 @@ const checkConfig = async (
       ) ?? embeddingModelProvider.embeddingModels[0];
     embeddingModelKey = embeddingModel.key;
 
-    localStorage.setItem('chatModelKey', chatModelKey);
-    localStorage.setItem('chatModelProviderId', chatModelProviderId);
-    localStorage.setItem('embeddingModelKey', embeddingModelKey);
-    localStorage.setItem('embeddingModelProviderId', embeddingModelProviderId);
+    setPreference('chatModelKey', chatModelKey);
+    setPreference('chatModelProviderId', chatModelProviderId);
+    setPreference('embeddingModelKey', embeddingModelKey);
+    setPreference('embeddingModelProviderId', embeddingModelProviderId);
 
     setChatModelProvider({
       key: chatModelKey,
@@ -341,8 +348,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
     if (savedEffort === 'none') {
       setChatThinkingEnabled(false);
-      localStorage.setItem('chatThinkingEnabled', 'false');
-      localStorage.removeItem('chatReasoningEffort');
+      setPreference('chatThinkingEnabled', 'false');
+      removePreference('chatReasoningEffort');
     } else if (
       savedEffort &&
       ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(
@@ -358,6 +365,54 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       key: '',
       providerId: '',
     });
+
+  // Model choices made in another client (another browser, Vane Desktop) apply here too.
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      const { keys, remote } = (event as CustomEvent<PreferencesChangedDetail>)
+        .detail;
+      if (!remote) return;
+      const read = (key: string) => getPreference(key) ?? '';
+      if (
+        keys.includes('chatModelKey') ||
+        keys.includes('chatModelProviderId')
+      ) {
+        if (read('chatModelKey') && read('chatModelProviderId')) {
+          setChatModelProvider({
+            key: read('chatModelKey'),
+            providerId: read('chatModelProviderId'),
+          });
+        }
+      }
+      if (
+        keys.includes('embeddingModelKey') ||
+        keys.includes('embeddingModelProviderId')
+      ) {
+        if (read('embeddingModelKey') && read('embeddingModelProviderId')) {
+          setEmbeddingModelProvider({
+            key: read('embeddingModelKey'),
+            providerId: read('embeddingModelProviderId'),
+          });
+        }
+      }
+      if (keys.includes('chatThinkingEnabled')) {
+        const thinking = read('chatThinkingEnabled');
+        setChatThinkingEnabled(
+          thinking === '' ? undefined : thinking === 'true',
+        );
+      }
+      if (keys.includes('chatReasoningEffort')) {
+        setChatReasoningEffort(
+          (read('chatReasoningEffort') || undefined) as
+            | ReasoningEffort
+            | undefined,
+        );
+      }
+    };
+    window.addEventListener(PREFERENCES_CHANGED_EVENT, onChange);
+    return () =>
+      window.removeEventListener(PREFERENCES_CHANGED_EVENT, onChange);
+  }, []);
 
   const [isConfigReady, setIsConfigReady] = useState(false);
   const [hasError, setHasError] = useState(false);

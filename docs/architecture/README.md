@@ -36,3 +36,11 @@ For a high level flow, see [WORKING.md](WORKING.md). For deeper implementation d
 
 7. **Storage**
    - Chats and messages are stored so conversations can be reloaded.
+
+8. **Shared client preferences** (`src/lib/preferences/`)
+   - Settings chosen in the UI (theme, measurement unit, widgets, system instructions, selected chat/embedding model, reasoning options, favorite models) live on the server in `data/preferences.json`, so every client of the same server — browsers, Vane Desktop, embedded webviews — shows the same settings.
+   - Each client keeps a localStorage copy for synchronous reads. Writes go through `setPreference`/`removePreference`, which update the copy and `PATCH /api/preferences`. Changes from other clients arrive over `GET /api/preferences/events` (server-sent events) and are written into the copy.
+   - `PreferencesSync` holds rendering until the shared values are loaded (at most 3 s, then it uses the local copy), so components never start from a stale copy and write it back.
+   - The first time a client syncs, it adds its existing settings for keys the server does not have yet and joins its favorite models with the server's; the server's values win otherwise.
+   - Window-local state stays per client: sidebar expansion and the New question shortcut (global in Vane Desktop).
+   - The synced keys are listed in `src/lib/preferences/keys.ts`; a new client-scoped setting must be added there to sync.

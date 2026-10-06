@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Search, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { setPreference } from '@/lib/preferences/client';
 
 const SEARCHABLE_LIST_THRESHOLD = 12;
 
@@ -115,16 +116,16 @@ const ModelSelect = ({
       const modelKey = newValue.split('/').slice(1).join('/');
 
       if (type === 'chat') {
-        localStorage.setItem('chatModelProviderId', providerId);
-        localStorage.setItem('chatModelKey', modelKey);
+        setPreference('chatModelProviderId', providerId);
+        setPreference('chatModelKey', modelKey);
 
         setChatModelProvider({
           providerId: providerId,
           key: modelKey,
         });
       } else {
-        localStorage.setItem('embeddingModelProviderId', providerId);
-        localStorage.setItem('embeddingModelKey', modelKey);
+        setPreference('embeddingModelProviderId', providerId);
+        setPreference('embeddingModelKey', modelKey);
 
         setEmbeddingModelProvider({
           providerId: providerId,

@@ -1,3 +1,5 @@
+import { setPreference } from '@/lib/preferences/client';
+
 export type FavoriteChatModel = {
   providerId: string;
   key: string;
@@ -24,7 +26,7 @@ export const readFavoriteChatModels = (): FavoriteChatModel[] => {
 };
 
 export const writeFavoriteChatModels = (favorites: FavoriteChatModel[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites));
+  setPreference(STORAGE_KEY, JSON.stringify(favorites));
   window.dispatchEvent(new Event(FAVORITES_CHANGED_EVENT));
 };
 
