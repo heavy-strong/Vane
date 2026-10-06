@@ -43,20 +43,6 @@
     background: #d0d7de; /* light-300 */
   }
 
-  @media (prefers-color-scheme: dark) {
-    * {
-      scrollbar-color: #21262d transparent; /* dark-200 */
-    }
-
-    *::-webkit-scrollbar-thumb {
-      background: #21262d; /* dark-200 */
-    }
-
-    *::-webkit-scrollbar-thumb:hover {
-      background: #30363d; /* dark-300 */
-    }
-  }
-
   :root.dark *,
   html.dark *,
   body.dark * {

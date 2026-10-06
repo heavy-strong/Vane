@@ -38,8 +38,8 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-row items-center space-x-1">
               {source.metadata.url.includes('file_id://') ? (
-                <div className="bg-dark-200 hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full">
-                  <File size={12} className="text-white/70" />
+                <div className="bg-light-200 hover:bg-light-300 dark:bg-dark-200 dark:hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full">
+                  <File size={12} className="text-black/70 dark:text-white/70" />
                 </div>
               ) : (
                 <img
@@ -73,9 +73,9 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
               return source.metadata.url === 'File' ? (
                 <div
                   key={i}
-                  className="bg-dark-200 hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full"
+                  className="bg-light-200 hover:bg-light-300 dark:bg-dark-200 dark:hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full"
                 >
-                  <File size={12} className="text-white/70" />
+                  <File size={12} className="text-black/70 dark:text-white/70" />
                 </div>
               ) : (
                 <img
@@ -125,8 +125,8 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
                         <div className="flex flex-row items-center justify-between">
                           <div className="flex flex-row items-center space-x-1">
                             {source.metadata.url === 'File' ? (
-                              <div className="bg-dark-200 hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full">
-                                <File size={12} className="text-white/70" />
+                              <div className="bg-light-200 hover:bg-light-300 dark:bg-dark-200 dark:hover:bg-dark-100 transition duration-200 flex items-center justify-center w-6 h-6 rounded-full">
+                                <File size={12} className="text-black/70 dark:text-white/70" />
                               </div>
                             ) : (
                               <img

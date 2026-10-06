@@ -133,7 +133,7 @@ const AttachSmall = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="h-[0.5px] mx-2 bg-white/10" />
+                  <div className="h-[0.5px] mx-2 bg-black/10 dark:bg-white/10" />
                   <div className="flex flex-col items-center">
                     {files.map((file, i) => (
                       <div
