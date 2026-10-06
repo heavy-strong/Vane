@@ -7,7 +7,7 @@ import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
 import db from '@/lib/db';
 import { eq } from 'drizzle-orm';
-import { chats } from '@/lib/db/schema';
+import { chats, projects } from '@/lib/db/schema';
 import UploadManager from '@/lib/uploads/manager';
 
 export const runtime = 'nodejs';
@@ -53,6 +53,7 @@ const bodySchema = z.object({
   embeddingModel: embeddingModelSchema,
   reasoning: reasoningSchema.optional(),
   systemInstructions: z.string().nullable().optional().default(''),
+  projectId: z.string().nullable().optional(),
 });
 
 type Body = z.infer<typeof bodySchema>;
@@ -81,7 +82,8 @@ const ensureChatExists = async (input: {
   sources: SearchSources[];
   query: string;
   fileIds: string[];
-}) => {
+  projectId?: string | null;
+}): Promise<string | null> => {
   try {
     const exists = await db.query.chats
       .findFirst({
@@ -89,22 +91,50 @@ const ensureChatExists = async (input: {
       })
       .execute();
 
-    if (!exists) {
-      await db.insert(chats).values({
-        id: input.id,
-        createdAt: new Date().toISOString(),
-        sources: input.sources,
-        title: input.query,
-        files: input.fileIds.map((id) => {
-          return {
-            fileId: id,
-            name: UploadManager.getFile(id)?.name || 'Uploaded File',
-          };
-        }),
-      });
+    if (exists) {
+      return exists.projectId ?? null;
     }
+
+    let projectId: string | null = null;
+    if (input.projectId) {
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, input.projectId),
+      });
+      projectId = project ? project.id : null;
+    }
+
+    await db.insert(chats).values({
+      id: input.id,
+      createdAt: new Date().toISOString(),
+      sources: input.sources,
+      title: input.query,
+      files: input.fileIds.map((id) => {
+        return {
+          fileId: id,
+          name: UploadManager.getFile(id)?.name || 'Uploaded File',
+        };
+      }),
+      projectId,
+    });
+
+    return projectId;
   } catch (err) {
     console.error('Failed to check/save chat:', err);
+    return null;
+  }
+};
+
+const getProjectInstructions = async (projectId: string | null) => {
+  if (!projectId) return '';
+
+  try {
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+    });
+    return project?.instructions?.trim() ?? '';
+  } catch (err) {
+    console.error('Failed to load project instructions:', err);
+    return '';
   }
 };
 
@@ -243,6 +273,22 @@ export const POST = async (req: Request) => {
       }
     });
 
+    // Saved before streaming starts so the chat (and its project) is visible
+    // in the sidebar as soon as the client receives the response.
+    const projectId = await ensureChatExists({
+      id: body.message.chatId,
+      sources: body.sources as SearchSources[],
+      fileIds: body.files,
+      query: body.message.content,
+      projectId: body.projectId,
+    });
+
+    const projectInstructions = await getProjectInstructions(projectId);
+    const systemInstructions =
+      [body.systemInstructions?.trim(), projectInstructions]
+        .filter(Boolean)
+        .join('\n\n') || 'None';
+
     agent
       .searchAsync(session, {
         chatHistory: history,
@@ -255,7 +301,7 @@ export const POST = async (req: Request) => {
           sources: body.sources as SearchSources[],
           mode: body.optimizationMode,
           fileIds: body.files,
-          systemInstructions: body.systemInstructions || 'None',
+          systemInstructions,
           modelInfo: {
             providerName: modelInfo.providerName,
             modelName: modelInfo.modelName,
@@ -268,13 +314,6 @@ export const POST = async (req: Request) => {
           data: err instanceof Error ? err.message : 'An error occurred',
         });
       });
-
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: body.message.content,
-    });
 
     req.signal.addEventListener('abort', () => {
       disconnect();

@@ -1,27 +1,37 @@
 'use client';
 
 import DeleteChat from '@/components/DeleteChat';
+import { ProjectDialog } from '@/components/ui/Dialogs';
+import {
+  ChatSummary,
+  fetchProjects,
+  LIBRARY_CHANGED_EVENT,
+  Project,
+} from '@/lib/library';
 import { formatTimeDifference } from '@/lib/utils';
-import { BookOpenText, ClockIcon, FileText, Globe2Icon } from 'lucide-react';
+import {
+  BookOpenText,
+  ClockIcon,
+  FileText,
+  Folder,
+  FolderPlus,
+  Globe2Icon,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export interface Chat {
-  id: string;
-  title: string;
-  createdAt: string;
-  sources: string[];
-  files: { fileId: string; name: string }[];
-}
+export type Chat = ChatSummary;
 
 const Page = () => {
+  const router = useRouter();
   const [chats, setChats] = useState<Chat[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchChats = async () => {
-      setLoading(true);
-
       const res = await fetch(`/api/chats`, {
         method: 'GET',
         headers: {
@@ -32,11 +42,16 @@ const Page = () => {
       const data = await res.json();
 
       setChats(data.chats);
+      setProjects(await fetchProjects().catch(() => []));
       setLoading(false);
     };
 
     fetchChats();
+    window.addEventListener(LIBRARY_CHANGED_EVENT, fetchChats);
+    return () => window.removeEventListener(LIBRARY_CHANGED_EVENT, fetchChats);
   }, []);
+
+  const projectNames = new Map(projects.map((p) => [p.id, p.name]));
 
   return (
     <div>
@@ -87,90 +102,152 @@ const Page = () => {
             />
           </svg>
         </div>
-      ) : chats.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] px-2 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl border border-light-200 dark:border-dark-200 bg-light-secondary dark:bg-dark-secondary">
-            <BookOpenText className="text-black/70 dark:text-white/70" />
-          </div>
-          <p className="mt-2 text-black/70 dark:text-white/70 text-sm">
-            No chats found.
-          </p>
-          <p className="mt-1 text-black/70 dark:text-white/70 text-sm">
-            <Link href="/" className="text-sky-400">
-              Start a new chat
-            </Link>{' '}
-            to see it listed here.
-          </p>
-        </div>
       ) : (
-        <div className="pt-6 pb-28 px-2">
-          <div className="rounded-2xl border border-light-200 dark:border-dark-200 overflow-hidden bg-light-primary dark:bg-dark-primary">
-            {chats.map((chat, index) => {
-              const sourcesLabel =
-                chat.sources.length === 0
-                  ? null
-                  : chat.sources.length <= 2
-                    ? chat.sources
-                        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-                        .join(', ')
-                    : `${chat.sources
-                        .slice(0, 2)
-                        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-                        .join(', ')} + ${chat.sources.length - 2}`;
-
-              return (
-                <div
-                  key={chat.id}
-                  className={
-                    'group flex flex-col gap-2 p-4 hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200 ' +
-                    (index !== chats.length - 1
-                      ? 'border-b border-light-200 dark:border-dark-200'
-                      : '')
-                  }
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <Link
-                      href={`/c/${chat.id}`}
-                      className="flex-1 text-black dark:text-white text-base lg:text-lg font-medium leading-snug line-clamp-2 group-hover:text-[#24A0ED] transition duration-200"
-                      title={chat.title}
-                    >
-                      {chat.title}
-                    </Link>
-                    <div className="pt-0.5 shrink-0">
-                      <DeleteChat
-                        chatId={chat.id}
-                        chats={chats}
-                        setChats={setChats}
-                      />
+        <>
+          <div className="pt-6 px-2">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-black/70 dark:text-white/70">
+                Projects
+              </h2>
+              <button
+                onClick={() => setProjectDialogOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-light-200 dark:border-dark-200 px-3 py-1 text-xs text-black/70 dark:text-white/70 hover:border-[#24A0ED]/60 transition-colors duration-200"
+              >
+                <FolderPlus size={14} />
+                New project
+              </button>
+            </div>
+            {projects.length === 0 ? (
+              <p className="text-xs text-black/50 dark:text-white/50">
+                Projects group related chats and share instructions across them.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {projects.map((project) => (
+                  <Link
+                    key={project.id}
+                    href={`/p/${project.id}`}
+                    className="group flex items-start gap-3 rounded-2xl border border-light-200 dark:border-dark-200 p-4 hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200"
+                  >
+                    <Folder
+                      size={18}
+                      className="mt-0.5 shrink-0 text-[#24A0ED]"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-black dark:text-white truncate group-hover:text-[#24A0ED] transition duration-200">
+                        {project.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-black/50 dark:text-white/50 truncate">
+                        {project.description ||
+                          `${project.chatCount} ${project.chatCount === 1 ? 'chat' : 'chats'}`}
+                      </p>
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-black/70 dark:text-white/70">
-                    <span className="inline-flex items-center gap-1 text-xs">
-                      <ClockIcon size={14} />
-                      {formatTimeDifference(new Date(), chat.createdAt)} Ago
-                    </span>
-
-                    {sourcesLabel && (
-                      <span className="inline-flex items-center gap-1 text-xs border border-black/20 dark:border-white/20 rounded-full px-2 py-0.5">
-                        <Globe2Icon size={14} />
-                        {sourcesLabel}
-                      </span>
-                    )}
-                    {chat.files.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs border border-black/20 dark:border-white/20 rounded-full px-2 py-0.5">
-                        <FileText size={14} />
-                        {chat.files.length}{' '}
-                        {chat.files.length === 1 ? 'file' : 'files'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+          {chats.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] px-2 text-center">
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl border border-light-200 dark:border-dark-200 bg-light-secondary dark:bg-dark-secondary">
+                <BookOpenText className="text-black/70 dark:text-white/70" />
+              </div>
+              <p className="mt-2 text-black/70 dark:text-white/70 text-sm">
+                No chats found.
+              </p>
+              <p className="mt-1 text-black/70 dark:text-white/70 text-sm">
+                <Link href="/" className="text-sky-400">
+                  Start a new chat
+                </Link>{' '}
+                to see it listed here.
+              </p>
+            </div>
+          ) : (
+            <div className="pt-6 pb-28 px-2">
+              <div className="rounded-2xl border border-light-200 dark:border-dark-200 overflow-hidden bg-light-primary dark:bg-dark-primary">
+                {chats.map((chat, index) => {
+                  const sourcesLabel =
+                    chat.sources.length === 0
+                      ? null
+                      : chat.sources.length <= 2
+                        ? chat.sources
+                            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+                            .join(', ')
+                        : `${chat.sources
+                            .slice(0, 2)
+                            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+                            .join(', ')} + ${chat.sources.length - 2}`;
+
+                  return (
+                    <div
+                      key={chat.id}
+                      className={
+                        'group flex flex-col gap-2 p-4 hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200 ' +
+                        (index !== chats.length - 1
+                          ? 'border-b border-light-200 dark:border-dark-200'
+                          : '')
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <Link
+                          href={`/c/${chat.id}`}
+                          className="flex-1 text-black dark:text-white text-base lg:text-lg font-medium leading-snug line-clamp-2 group-hover:text-[#24A0ED] transition duration-200"
+                          title={chat.title}
+                        >
+                          {chat.title}
+                        </Link>
+                        <div className="pt-0.5 shrink-0">
+                          <DeleteChat
+                            chatId={chat.id}
+                            chats={chats}
+                            setChats={setChats}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-black/70 dark:text-white/70">
+                        <span className="inline-flex items-center gap-1 text-xs">
+                          <ClockIcon size={14} />
+                          {formatTimeDifference(new Date(), chat.createdAt)} Ago
+                        </span>
+
+                        {sourcesLabel && (
+                          <span className="inline-flex items-center gap-1 text-xs border border-black/20 dark:border-white/20 rounded-full px-2 py-0.5">
+                            <Globe2Icon size={14} />
+                            {sourcesLabel}
+                          </span>
+                        )}
+                        {chat.projectId && projectNames.has(chat.projectId) && (
+                          <Link
+                            href={`/p/${chat.projectId}`}
+                            className="inline-flex items-center gap-1 text-xs border border-black/20 dark:border-white/20 rounded-full px-2 py-0.5 hover:text-[#24A0ED] transition duration-200"
+                          >
+                            <Folder size={14} />
+                            {projectNames.get(chat.projectId)}
+                          </Link>
+                        )}
+                        {chat.files.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-xs border border-black/20 dark:border-white/20 rounded-full px-2 py-0.5">
+                            <FileText size={14} />
+                            {chat.files.length}{' '}
+                            {chat.files.length === 1 ? 'file' : 'files'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
+
+      <ProjectDialog
+        open={projectDialogOpen}
+        onClose={() => setProjectDialogOpen(false)}
+        onSaved={(project) => router.push(`/p/${project.id}`)}
+      />
     </div>
   );
 };

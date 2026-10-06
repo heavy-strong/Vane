@@ -11,6 +11,7 @@ import {
 import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Chat } from '@/app/library/page';
+import { notifyLibraryChanged } from '@/lib/library';
 
 const DeleteChat = ({
   chatId,
@@ -43,6 +44,7 @@ const DeleteChat = ({
       const newChats = chats.filter((chat) => chat.id !== chatId);
 
       setChats(newChats);
+      notifyLibraryChanged();
 
       if (redirect) {
         window.location.href = '/';

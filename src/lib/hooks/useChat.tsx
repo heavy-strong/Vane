@@ -18,6 +18,7 @@ import { MinimalProvider, ReasoningEffort } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
 import { Widget } from '@/components/ChatWindow';
+import { notifyLibraryChanged } from '../library';
 
 export type Section = {
   message: Message;
@@ -820,6 +821,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     setMessages((prevMessages) => [...prevMessages, newMessage]);
 
+    const isFirstMessage = messages.length === 0;
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
     const res = await fetch('/api/chat', {
@@ -863,10 +865,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           providerId: embeddingModelProvider.providerId,
         },
         systemInstructions: localStorage.getItem('systemInstructions'),
+        // Only used by the server when the chat is created; a new chat started
+        // from a project page (`/?project=<id>`) is saved into that project.
+        projectId: isFirstMessage ? searchParams.get('project') : undefined,
       }),
     });
 
     if (!res.body) throw new Error('No response body');
+
+    if (isFirstMessage && res.ok) {
+      notifyLibraryChanged();
+    }
 
     const reader = res.body?.getReader();
     const decoder = new TextDecoder('utf-8');

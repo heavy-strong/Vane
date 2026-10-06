@@ -38,4 +38,13 @@ export const chats = sqliteTable('chats', {
   files: text('files', { mode: 'json' })
     .$type<DBFile[]>()
     .default(sql`'[]'`),
+  projectId: text('projectId'),
+});
+
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  instructions: text('instructions').notNull().default(''),
+  createdAt: text('createdAt').notNull(),
 });

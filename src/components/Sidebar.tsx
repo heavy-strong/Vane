@@ -1,28 +1,16 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import {
-  BookOpenText,
-  Home,
-  Search,
-  SquarePen,
-  Settings,
-  Plus,
-  ArrowLeft,
-} from 'lucide-react';
+import { BookOpenText, Home, Search, Plus, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import React, { useEffect, useState, type ReactNode } from 'react';
 import Layout from './Layout';
-import {
-  Description,
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-} from '@headlessui/react';
+import SidebarPanel from './SidebarPanel';
 import SettingsButton from './Settings/SettingsButton';
 import { shortcutMatches } from '@/lib/shortcuts';
 import { isDesktop } from '@/lib/desktop';
+import { usePersistedToggle } from '@/lib/hooks/usePersistedToggle';
 
 const VerticalIconContainer = ({ children }: { children: ReactNode }) => {
   return <div className="flex flex-col items-center w-full">{children}</div>;
@@ -33,7 +21,10 @@ const DEFAULT_NEW_QUESTION_SHORTCUT = 'Ctrl+Alt+N';
 const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const segments = useSelectedLayoutSegments();
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState<boolean>(true);
+  const [expanded, toggleExpanded] = usePersistedToggle(
+    'sidebarExpanded',
+    true,
+  );
   const [newQuestionShortcut, setNewQuestionShortcut] = useState(
     DEFAULT_NEW_QUESTION_SHORTCUT,
   );
@@ -97,21 +88,58 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
     {
       icon: BookOpenText,
       href: '/library',
-      active: segments.includes('library'),
+      active: segments.includes('library') || segments.includes('p'),
       label: 'Library',
     },
   ];
 
+  // In the expanded panel the active chat/project row is highlighted itself,
+  // so Home and Library only light up on their own pages.
+  const panelNavLinks = navLinks.map((link) => ({
+    ...link,
+    active:
+      link.href === '/'
+        ? segments.length === 0
+        : link.href === '/library'
+          ? segments.includes('library')
+          : link.active,
+  }));
+
   return (
     <div>
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-[72px] lg:flex-col border-r border-light-200 dark:border-dark-200">
+      {expanded && (
+        <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col border-r border-light-200 dark:border-dark-200">
+          <SidebarPanel
+            navLinks={panelNavLinks}
+            newQuestionShortcut={newQuestionShortcut}
+            onCollapse={toggleExpanded}
+          />
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'hidden lg:fixed lg:inset-y-0 lg:z-50 lg:w-[72px] lg:flex-col border-r border-light-200 dark:border-dark-200',
+          !expanded && 'lg:flex',
+        )}
+      >
         <div className="flex grow flex-col items-center justify-between gap-y-5 overflow-y-auto bg-light-secondary dark:bg-dark-secondary px-2 py-8 shadow-sm shadow-light-200/10 dark:shadow-black/25">
-          <a
-            className="p-2.5 rounded-full bg-light-200 text-black/70 dark:bg-dark-200 dark:text-white/70 hover:opacity-70 hover:scale-105 tansition duration-200"
-            href="/"
-          >
-            <Plus size={19} className="cursor-pointer" />
-          </a>
+          <div className="flex flex-col items-center gap-y-3">
+            <button
+              onClick={toggleExpanded}
+              className="p-2 rounded-lg text-black/60 dark:text-white/60 hover:bg-light-200 hover:dark:bg-dark-200 transition duration-200"
+              aria-label="Expand sidebar"
+              title="Show chats and projects"
+            >
+              <PanelLeftOpen size={19} />
+            </button>
+            <a
+              className="p-2.5 rounded-full bg-light-200 text-black/70 dark:bg-dark-200 dark:text-white/70 hover:opacity-70 hover:scale-105 tansition duration-200"
+              href="/"
+            >
+              <Plus size={19} className="cursor-pointer" />
+            </a>
+          </div>
           <VerticalIconContainer>
             {navLinks.map((link, i) => (
               <Link
@@ -177,7 +205,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         ))}
       </div>
 
-      <Layout>{children}</Layout>
+      <Layout sidebarExpanded={expanded}>{children}</Layout>
     </div>
   );
 };

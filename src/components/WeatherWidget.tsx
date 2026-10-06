@@ -128,25 +128,28 @@ const WeatherWidget = () => {
               alt={data.condition}
               className="h-10 w-auto"
             />
-            <span className="text-base font-semibold text-black dark:text-white">
+            <span className="text-base font-semibold text-black dark:text-white whitespace-nowrap">
               {data.temperature}°{data.temperatureUnit}
             </span>
           </div>
-          <div className="flex flex-col justify-between flex-1 h-full py-2">
-            <div className="flex flex-row items-center justify-between">
-              <span className="text-sm font-semibold text-black dark:text-white">
+          <div className="flex flex-col justify-between flex-1 min-w-0 h-full py-2">
+            <div className="flex flex-row items-center justify-between gap-2 min-w-0">
+              <span
+                className="text-sm font-semibold text-black dark:text-white truncate min-w-0"
+                title={data.location}
+              >
                 {data.location}
               </span>
-              <span className="flex items-center text-xs text-black/60 dark:text-white/60 font-medium">
+              <span className="flex items-center shrink-0 whitespace-nowrap text-xs text-black/60 dark:text-white/60 font-medium">
                 <Wind className="w-3 h-3 mr-1" />
                 {data.windSpeed} {data.windSpeedUnit}
               </span>
             </div>
-            <span className="text-xs text-black/50 dark:text-white/50 italic">
+            <span className="text-xs text-black/50 dark:text-white/50 italic truncate">
               {data.condition}
             </span>
             <div className="flex flex-row justify-between w-full mt-auto pt-2 border-t border-light-200/50 dark:border-dark-200/50 text-xs text-black/50 dark:text-white/50 font-medium">
-              <span>Humidity {data.humidity}%</span>
+              <span className="truncate">Humidity {data.humidity}%</span>
               <span className="font-semibold text-black/70 dark:text-white/70">
                 Now
               </span>
