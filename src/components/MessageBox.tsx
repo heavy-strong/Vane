@@ -28,6 +28,7 @@ import AssistantSteps from './AssistantSteps';
 import { ResearchBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
+import MathTex, { preprocessMath } from './MessageRenderer/MathTex';
 
 const formatDuration = (ms: number) => {
   if (ms < 1000) return `${ms}ms`;
@@ -107,6 +108,9 @@ const MessageBox = ({
       },
       citation: {
         component: Citation,
+      },
+      mathtex: {
+        component: MathTex,
       },
     },
   };
@@ -192,7 +196,7 @@ const MessageBox = ({
                   )}
                   options={markdownOverrides}
                 >
-                  {parsedMessage}
+                  {preprocessMath(parsedMessage)}
                 </Markdown>
 
                 {loading && isLast ? null : (

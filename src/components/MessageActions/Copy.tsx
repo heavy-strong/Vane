@@ -8,6 +8,7 @@ import {
   isDecodeCitationUrlsEnabled,
   safeDecodeURI,
 } from '@/lib/utils/urlDecode';
+import { normalizeMathDelimiters } from '../MessageRenderer/MathTex';
 
 const Copy = ({
   section,
@@ -30,7 +31,9 @@ const Copy = ({
         const formatUrl = (url: string) =>
           decodeCitationUrls ? safeDecodeURI(url) : url;
 
-        const contentToCopy = `${formatMessageForCopy(initialMessage)}${
+        const contentToCopy = `${formatMessageForCopy(
+          normalizeMathDelimiters(initialMessage),
+        )}${
           sources.length > 0
             ? `\n\nCitations:\n${sources
                 .map((source) => source.data)

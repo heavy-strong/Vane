@@ -383,7 +383,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       msg.responseBlocks.forEach((block) => {
         if (block.type === 'text') {
           let processedText = block.data;
-          const citationRegex = /\[([^\]]+)\]/g;
+          const citationRegex = /(?<!\\)\[([^\]]+)\]/g;
           const regex = /\[(\d+)\]/g;
 
           if (processedText.includes('<think>')) {
