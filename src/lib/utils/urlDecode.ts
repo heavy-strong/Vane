@@ -41,3 +41,62 @@ export const formatMessageForCopy = (text: string) => {
 };
 
 export { isDecodeCitationUrlsEnabled, safeDecodeURI, URL_PATTERN };
+
+const TABLE_ROW_PATTERN = /^\s*\|.*\|\s*$/;
+const TABLE_SEPARATOR_PATTERN = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+/**
+ * Makes GFM tables survive a paste into Obsidian (and other markdown
+ * editors): block math inside a cell is collapsed to inline `$...$` so the row
+ * isn't split across lines, literal `|` inside link URLs / inline math is
+ * escaped so it doesn't create phantom columns, and tables are surrounded by
+ * blank lines, which Obsidian requires to recognise them.
+ *
+ * Must run BEFORE `normalizeMathDelimiters`, which would otherwise expand
+ * `\[...\]` inside a row into a multi-line `$$` block.
+ */
+export const formatTablesForCopy = (text: string) => {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  let inFence = false;
+
+  const isTableStart = (i: number) =>
+    TABLE_ROW_PATTERN.test(lines[i]) &&
+    i + 1 < lines.length &&
+    TABLE_SEPARATOR_PATTERN.test(lines[i + 1]);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+
+    if (inFence || !isTableStart(i)) {
+      out.push(line);
+      continue;
+    }
+
+    if (out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+
+    while (i < lines.length && TABLE_ROW_PATTERN.test(lines[i])) {
+      out.push(
+        lines[i]
+          .replace(/\\\[([\s\S]+?)\\\]/g, (_, tex) => `$${tex.trim()}$`)
+          .replace(/\$\$([^$]+?)\$\$/g, (_, tex) => `$${tex.trim()}$`)
+          .replace(/(\]\()([^)\s]*)(\))/g, (_, a, url: string, b) =>
+            `${a}${url.replace(/(?<!\\)\|/g, '%7C')}${b}`,
+          )
+          .replace(/(<citation href=")([^"]*)(")/g, (_, a, url: string, b) =>
+            `${a}${url.replace(/\|/g, '%7C')}${b}`,
+          )
+          .replace(/(?<!\\)\$([^$\n]+?)\$/g, (m, tex: string) =>
+            `$${tex.replace(/(?<!\\)\|/g, '\\vert ')}$`,
+          ),
+      );
+      i++;
+    }
+    i--;
+
+    if (i + 1 < lines.length && lines[i + 1].trim() !== '') out.push('');
+  }
+
+  return out.join('\n');
+};

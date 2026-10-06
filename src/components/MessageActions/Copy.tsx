@@ -5,6 +5,7 @@ import { Section } from '@/lib/hooks/useChat';
 import { SourceBlock } from '@/lib/types';
 import {
   formatMessageForCopy,
+  formatTablesForCopy,
   isDecodeCitationUrlsEnabled,
   safeDecodeURI,
 } from '@/lib/utils/urlDecode';
@@ -32,7 +33,7 @@ const Copy = ({
           decodeCitationUrls ? safeDecodeURI(url) : url;
 
         const contentToCopy = `${formatMessageForCopy(
-          normalizeMathDelimiters(initialMessage),
+          normalizeMathDelimiters(formatTablesForCopy(initialMessage)),
         )}${
           sources.length > 0
             ? `\n\nCitations:\n${sources

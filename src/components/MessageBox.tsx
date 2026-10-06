@@ -28,6 +28,7 @@ import AssistantSteps from './AssistantSteps';
 import { ResearchBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
+import TableBlock from './MessageRenderer/TableBlock';
 import MathTex, { preprocessMath } from './MessageRenderer/MathTex';
 
 const formatDuration = (ms: number) => {
@@ -111,6 +112,9 @@ const MessageBox = ({
       },
       mathtex: {
         component: MathTex,
+      },
+      table: {
+        component: TableBlock,
       },
     },
   };

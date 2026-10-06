@@ -7,6 +7,35 @@ const texOf = (el: Element) =>
   el.querySelector('annotation[encoding="application/x-tex"]')?.textContent ??
   '';
 
+const cellText = (cell: Element) => {
+  // Live cells still hold rendered KaTeX; swap it for its LaTeX source.
+  const clone = cell.cloneNode(true) as Element;
+  clone.querySelectorAll('.katex').forEach((el) => {
+    el.replaceWith(`$${texOf(el)}$`);
+  });
+  clone.querySelectorAll('button').forEach((el) => el.remove());
+  return (clone.textContent ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/(?<!\\)\|/g, '\\|');
+};
+
+/** Serialises a rendered `<table>` as a GFM table, as Obsidian expects. */
+export const tableToMarkdown = (table: HTMLTableElement) => {
+  const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
+    Array.from(tr.querySelectorAll('th, td')).map(cellText),
+  );
+  if (rows.length === 0) return '';
+  const cols = Math.max(...rows.map((r) => r.length));
+  const line = (r: string[]) =>
+    `| ${Array.from({ length: cols }, (_, i) => r[i] ?? '').join(' | ')} |`;
+  return [
+    line(rows[0]),
+    line(Array(cols).fill('---')),
+    ...rows.slice(1).map(line),
+  ].join('\n');
+};
+
 /**
  * When a selection containing rendered formulas is copied, put their LaTeX
  * source (`$..$` / `$$..$$`, as Obsidian expects) on the clipboard instead of
@@ -26,8 +55,14 @@ const handleCopy = (event: ClipboardEvent) => {
   if (startDisplay) range.setStartBefore(startDisplay);
   if (endDisplay) range.setEndAfter(endDisplay);
 
+  // Likewise grow it so partially selected tables are copied whole.
+  const startTable = range.startContainer.parentElement?.closest('table');
+  const endTable = range.endContainer.parentElement?.closest('table');
+  if (startTable) range.setStartBefore(startTable);
+  if (endTable) range.setEndAfter(endTable);
+
   const fragment = range.cloneContents();
-  if (!fragment.querySelector('.katex')) return;
+  if (!fragment.querySelector('.katex, table')) return;
 
   fragment.querySelectorAll('.katex-display').forEach((el) => {
     el.replaceWith(`\n$$\n${texOf(el)}\n$$\n`);
@@ -36,6 +71,10 @@ const handleCopy = (event: ClipboardEvent) => {
     el.replaceWith(`$${texOf(el)}$`);
   });
   fragment.querySelectorAll('button').forEach((el) => el.remove());
+  // Rendered tables would otherwise flatten to tab-separated text.
+  fragment.querySelectorAll('table').forEach((el) => {
+    el.replaceWith(`\n\n${tableToMarkdown(el)}\n\n`);
+  });
 
   // innerText (unlike textContent) keeps paragraph/line breaks, but only
   // works on attached, rendered nodes.
