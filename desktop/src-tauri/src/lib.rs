@@ -15,6 +15,7 @@ use tauri::{
     AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+#[cfg(not(target_os = "macos"))]
 use tauri_plugin_notification::NotificationExt;
 
 const MAIN_WINDOW: &str = "main";
@@ -306,12 +307,61 @@ fn show_notification(
     body: String,
 ) -> Result<(), String> {
     check_server_window(&app, &window, &scope)?;
+    let title: String = title.chars().take(200).collect();
+    let body: String = body.chars().take(500).collect();
+    #[cfg(target_os = "macos")]
+    {
+        show_macos_notification(app, title, body);
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
     app.notification()
         .builder()
-        .title(title.chars().take(200).collect::<String>())
-        .body(body.chars().take(500).collect::<String>())
+        .title(title)
+        .body(body)
         .show()
         .map_err(|e| e.to_string())
+}
+
+/// tauri-plugin-notification cannot report clicks on desktop, so on macOS the notification is
+/// delivered here and a click shows the main window, which may be hidden in the tray.
+///
+/// An unbundled development binary has no bundle id of its own, so it posts as Terminal, and
+/// macOS then routes clicks to Terminal. Clicking only reopens Vane in a bundled app.
+#[cfg(target_os = "macos")]
+fn show_macos_notification(app: AppHandle, title: String, body: String) {
+    use mac_notification_sys::{Notification, NotificationResponse};
+
+    static APPLICATION: std::sync::Once = std::sync::Once::new();
+    APPLICATION.call_once(|| {
+        let bundle = if tauri::is_dev() {
+            "com.apple.Terminal".to_string()
+        } else {
+            app.config().identifier.clone()
+        };
+        let _ = mac_notification_sys::set_application(&bundle);
+    });
+
+    // Waiting for the click blocks until the notification is clicked or dismissed.
+    std::thread::spawn(move || {
+        let response = Notification::new()
+            .title(&title)
+            .message(&body)
+            .wait_for_click(true)
+            .send();
+        match response {
+            Ok(NotificationResponse::Click) => {
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    if let Some(window) = handle.get_webview_window(MAIN_WINDOW) {
+                        show_window(&window);
+                    }
+                });
+            }
+            Ok(_) => {}
+            Err(error) => eprintln!("[vane-desktop] Notification failed: {error}"),
+        }
+    });
 }
 
 #[tauri::command]

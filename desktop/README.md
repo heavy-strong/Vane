@@ -6,7 +6,7 @@ A thin native shell (Tauri v2) around a self-hosted Vane instance. It adds what 
 - **Tray icon** — Show/Hide, New question, Settings, Quit.
 - **Close to tray** — closing the window hides it; the shortcut keeps working.
 - **Single instance** — launching it again just focuses the existing window.
-- **Notifications** — a native notification when an answer finishes while the window is in the background (toggle in **Vane Settings → Preferences**).
+- **Notifications** — a native notification when an answer finishes while the window is in the background (toggle in **Vane Settings → Preferences**). Clicking it brings the window back. On macOS, `npm run dev` posts notifications as Terminal, so clicks go to Terminal; use a bundled build (`npx tauri build --debug --bundles app`) to test clicking.
 
 The Vane server itself is _not_ bundled. Run Vane as usual (Docker or `npm start`) and point the desktop app at it.
 
