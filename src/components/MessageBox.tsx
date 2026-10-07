@@ -26,6 +26,7 @@ import { useChat, Section } from '@/lib/hooks/useChat';
 import Citation from './MessageRenderer/Citation';
 import AssistantSteps from './AssistantSteps';
 import { ResearchBlock } from '@/lib/types';
+import { splitModelName } from '@/lib/models/display';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
 import TableBlock from './MessageRenderer/TableBlock';
@@ -215,16 +216,19 @@ const MessageBox = ({
                           className="flex flex-row items-center gap-1 px-2 py-1 text-xs text-black/50 dark:text-white/50"
                           title={
                             section.message.modelProvider
-                              ? `${section.message.modelProvider} · ${section.message.modelName}`
+                              ? `${section.message.modelName} · ${section.message.modelProvider}`
                               : section.message.modelName
                           }
                         >
                           <Cpu size={13} className="shrink-0" />
-                          <span className="truncate max-w-[10rem]">
-                            {section.message.modelProvider
-                              ? `${section.message.modelProvider} · ${section.message.modelName}`
-                              : section.message.modelName}
+                          <span className="truncate max-w-[11rem] text-black/70 dark:text-white/70 sm:max-w-[16rem]">
+                            {splitModelName(section.message.modelName).label}
                           </span>
+                          {section.message.modelProvider && (
+                            <span className="hidden truncate max-w-[8rem] text-black/35 dark:text-white/35 sm:inline">
+                              · {section.message.modelProvider}
+                            </span>
+                          )}
                         </div>
                       )}
                       {typeof section.message.durationMs === 'number' && (
