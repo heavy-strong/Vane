@@ -97,6 +97,16 @@ class ConfigManager {
         default: true,
         scope: 'client',
       },
+      {
+        name: 'Notify when search completes',
+        key: 'notifyOnSearchComplete',
+        type: 'switch',
+        required: false,
+        description:
+          'Show a system notification when an answer finishes while Vane is in the background.',
+        default: true,
+        scope: 'client',
+      },
     ],
     shortcuts: [
       {

@@ -22,6 +22,7 @@ import {
   setDesktopShortcutRecording,
 } from '@/lib/desktop';
 import { setPreference } from '@/lib/preferences/client';
+import { requestNotificationPermission } from '@/lib/notifications';
 
 const emitClientConfigChanged = () => {
   if (typeof window !== 'undefined') {
@@ -500,6 +501,14 @@ const SettingsSwitch = ({
   const [loading, setLoading] = useState(false);
 
   const handleSave = async (newValue: boolean) => {
+    if (field.key === 'notifyOnSearchComplete' && newValue) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        toast.error(
+          'Notifications are blocked. Allow them for this site in your browser settings.',
+        );
+      }
+    }
     setLoading(true);
     setValue(newValue);
     try {

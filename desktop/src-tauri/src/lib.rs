@@ -15,6 +15,7 @@ use tauri::{
     AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 
 const MAIN_WINDOW: &str = "main";
 const SETTINGS_WINDOW: &str = "settings";
@@ -94,9 +95,10 @@ fn allow_server_shortcut_access(app: &AppHandle, url: &Url) -> tauri::Result<()>
             )
             .permission_scoped(
                 "allow-set-shortcut-recording",
-                scope,
+                scope.clone(),
                 Vec::<ServerScope>::new(),
             )
+            .permission_scoped("allow-show-notification", scope, Vec::<ServerScope>::new())
             // Citation links come from the configured Vane server. Permit it
             // to hand http(s) URLs to the OS default browser, but only from
             // that server origin and only in the main window.
@@ -121,7 +123,7 @@ fn check_server_window(
             .iter()
             .any(|allowed| allowed.origin == server.origin().ascii_serialization())
     {
-        return Err("Shortcut access is limited to the configured Vane server".into());
+        return Err("Desktop access is limited to the configured Vane server".into());
     }
     Ok(())
 }
@@ -293,6 +295,25 @@ fn set_desktop_shortcut(
     get_desktop_shortcut(app, window, scope)
 }
 
+/// Shows a native notification for the Vane server, e.g. when an answer finishes in the
+/// background. WebKit webviews do not implement the web Notification API.
+#[tauri::command]
+fn show_notification(
+    app: AppHandle,
+    window: WebviewWindow,
+    scope: CommandScope<ServerScope>,
+    title: String,
+    body: String,
+) -> Result<(), String> {
+    check_server_window(&app, &window, &scope)?;
+    app.notification()
+        .builder()
+        .title(title.chars().take(200).collect::<String>())
+        .body(body.chars().take(500).collect::<String>())
+        .show()
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn set_shortcut_recording(
     app: AppHandle,
@@ -456,12 +477,14 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
             get_desktop_shortcut,
             set_desktop_shortcut,
-            set_shortcut_recording
+            set_shortcut_recording,
+            show_notification
         ])
         .setup(|app| {
             let handle = app.handle().clone();

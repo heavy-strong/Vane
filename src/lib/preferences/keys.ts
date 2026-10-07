@@ -10,6 +10,7 @@ export const SYNCED_PREFERENCE_KEYS = [
   'showWeatherWidget',
   'showNewsWidget',
   'decodeCitationUrls',
+  'notifyOnSearchComplete',
   'systemInstructions',
   'chatModelProviderId',
   'chatModelKey',

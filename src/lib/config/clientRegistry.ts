@@ -9,6 +9,9 @@ export const getTheme = () => getClientConfig('theme', 'dark');
 export const getAutoMediaSearch = () =>
   getClientConfig('autoMediaSearch', 'true') === 'true';
 
+export const getNotifyOnSearchComplete = () =>
+  getClientConfig('notifyOnSearchComplete', 'true') === 'true';
+
 export const getSystemInstructions = () =>
   getClientConfig('systemInstructions', '');
 

@@ -6,6 +6,7 @@ fn main() {
             "get_desktop_shortcut",
             "set_desktop_shortcut",
             "set_shortcut_recording",
+            "show_notification",
         ]),
     ))
     .expect("Failed to build desktop permissions");

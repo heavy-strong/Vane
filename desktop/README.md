@@ -6,6 +6,7 @@ A thin native shell (Tauri v2) around a self-hosted Vane instance. It adds what 
 - **Tray icon** — Show/Hide, New question, Settings, Quit.
 - **Close to tray** — closing the window hides it; the shortcut keeps working.
 - **Single instance** — launching it again just focuses the existing window.
+- **Notifications** — a native notification when an answer finishes while the window is in the background (toggle in **Vane Settings → Preferences**).
 
 The Vane server itself is _not_ bundled. Run Vane as usual (Docker or `npm start`) and point the desktop app at it.
 
@@ -34,7 +35,7 @@ Once connected, open **Vane Settings → Keyboard shortcuts → New question** i
 
 Recording temporarily releases the global shortcut so its current combination can be recorded too. Escape, leaving the field, closing the settings, or changing windows restores it. A failed registration or save retains the previous setting and reports the error.
 
-The [Tauri capability system](https://tauri.app/security/capabilities/) grants the configured server origin access to only the shortcut read, write, and recording commands. Full desktop configuration and core system APIs remain available only to the bundled settings page. Native commands also verify the current server origin and the IPC permission scope, so previously configured origins cannot change the current server's shortcut.
+The [Tauri capability system](https://tauri.app/security/capabilities/) grants the configured server origin access to only the shortcut read, write, and recording commands and the notification command. Full desktop configuration and core system APIs remain available only to the bundled settings page. Native commands also verify the current server origin and the IPC permission scope, so previously configured origins cannot change the current server's shortcut.
 
 | OS      | Path                                                           |
 | ------- | -------------------------------------------------------------- |

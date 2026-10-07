@@ -24,6 +24,7 @@ const CLIENT_CONFIG_KEYS: string[] = [
   'showWeatherWidget',
   'showNewsWidget',
   'decodeCitationUrls',
+  'notifyOnSearchComplete',
   'systemInstructions',
 ];
 

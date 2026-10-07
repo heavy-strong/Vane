@@ -17,6 +17,10 @@ import { getSuggestions } from '../actions';
 import { MinimalProvider, ReasoningEffort } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import {
+  notifySearchComplete,
+  promptForNotificationPermission,
+} from '../notifications';
+import {
   getPreference,
   PREFERENCES_CHANGED_EVENT,
   PreferencesChangedDetail,
@@ -773,6 +777,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         chatHistory.current = newHistory;
 
+        notifySearchComplete(
+          message.query,
+          newHistory[newHistory.length - 1][1],
+        );
+
         setMessages((prev) =>
           prev.map((msg) =>
             msg.messageId === messageId
@@ -853,6 +862,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       toast.error('Select an embedding model before sending a message.');
       return;
     }
+    promptForNotificationPermission();
     setLoading(true);
     setResearchEnded(false);
     setMessageAppeared(false);
