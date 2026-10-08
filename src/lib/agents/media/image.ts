@@ -1,7 +1,7 @@
 /* I don't think can be classified as agents but to keep the structure consistent i guess ill keep it here */
 
 import { searchSearxng } from '@/lib/searxng';
-import { resolveSearchOptions } from '@/lib/searchEngines';
+import { keepQueryLanguage, resolveSearchOptions } from '@/lib/searchEngines';
 import {
   imageSearchFewShots,
   imageSearchPrompt,
@@ -45,9 +45,11 @@ const searchImages = async (
     schema: schema,
   });
 
+  const query = keepQueryLanguage(res.query, input.query);
+
   const searchRes = await searchSearxng(
-    res.query,
-    await resolveSearchOptions(res.query, 'images', input.query),
+    query,
+    await resolveSearchOptions(query, 'images', input.query),
   );
 
   const images: ImageSearchResult[] = [];

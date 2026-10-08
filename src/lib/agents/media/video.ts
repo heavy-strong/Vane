@@ -1,6 +1,6 @@
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { searchSearxng } from '@/lib/searxng';
-import { resolveSearchOptions } from '@/lib/searchEngines';
+import { keepQueryLanguage, resolveSearchOptions } from '@/lib/searchEngines';
 import {
   videoSearchFewShots,
   videoSearchPrompt,
@@ -46,9 +46,11 @@ const searchVideos = async (
     schema: schema,
   });
 
+  const query = keepQueryLanguage(res.query, input.query);
+
   const searchRes = await searchSearxng(
-    res.query,
-    await resolveSearchOptions(res.query, 'videos', input.query),
+    query,
+    await resolveSearchOptions(query, 'videos', input.query),
   );
 
   const videos: VideoSearchResult[] = [];

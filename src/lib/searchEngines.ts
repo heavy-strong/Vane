@@ -14,6 +14,14 @@ const HANGUL_RE = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/;
 
 export const containsHangul = (text: string) => HANGUL_RE.test(text);
 
+/* Media engines for Korean queries (Naver) return unrelated results for a
+ * query an LLM translated into English, so fall back to the user's own words
+ * when the rewrite dropped the Korean. */
+export const keepQueryLanguage = (rewritten: string, original: string) =>
+  containsHangul(original) && !containsHangul(rewritten)
+    ? original.trim()
+    : rewritten;
+
 /* Naver engines that map onto each search kind. `koreanEngines` (user
  * configurable) covers the web kind; media kinds use the fixed Naver
  * counterparts. */

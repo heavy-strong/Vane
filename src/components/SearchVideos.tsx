@@ -1,17 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
-import {
-  ExternalLink,
-  PlayCircle,
-  PlayIcon,
-  PlusIcon,
-  VideoIcon,
-} from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ExternalLink, PlayCircle } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import Lightbox, { GenericSlide, VideoSlide } from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
-import { Message } from './ChatWindow';
+import { MediaStatus } from '@/lib/hooks/useMediaSearch';
+import { sourceHost } from '@/lib/utils/source';
+import MediaState from './MediaState';
 
-type Video = {
+export type SearchVideo = {
   url: string;
   img_src: string;
   title: string;
@@ -33,243 +29,159 @@ declare module 'yet-another-react-lightbox' {
   }
 }
 
-const Searchvideos = ({
-  query,
-  chatHistory,
-  messageId,
+/** The video results for a message, shown in its Videos tab. */
+const SearchVideos = ({
+  videos,
+  status,
+  onRetry,
 }: {
-  query: string;
-  chatHistory: [string, string][];
-  messageId: string;
+  videos: SearchVideo[];
+  status: MediaStatus;
+  onRetry: () => void;
 }) => {
-  const [videos, setVideos] = useState<Video[] | null>(null);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [slides, setSlides] = useState<VideoSlide[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const videoRefs = useRef<(HTMLIFrameElement | null)[]>([]);
 
+  const slides = useMemo<VideoSlide[]>(
+    () =>
+      videos.map((video) => ({
+        type: 'video-slide',
+        iframe_src: video.iframe_src,
+        src: video.img_src,
+        url: video.url,
+        title: video.title,
+      })),
+    [videos],
+  );
+
+  if (status !== 'done' || videos.length === 0) {
+    return (
+      <MediaState
+        status={status}
+        empty="No videos found for this question."
+        onRetry={onRetry}
+      />
+    );
+  }
+
   return (
     <>
-      {!loading && videos === null && (
-        <button
-          id={`search-videos-${messageId}`}
-          onClick={async () => {
-            setLoading(true);
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-4">
+        {videos.map((video, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              setCurrentIndex(i);
+              setOpen(true);
+            }}
+            className="group flex flex-col gap-1.5 text-left"
+          >
+            <div className="relative w-full overflow-hidden rounded-xl bg-light-secondary dark:bg-dark-secondary">
+              <img
+                src={video.img_src}
+                alt={video.title}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="aspect-video w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/20">
+                <PlayCircle
+                  size={36}
+                  className="text-white/90 drop-shadow opacity-80 group-hover:opacity-100 transition-opacity duration-200"
+                />
+              </div>
+            </div>
+            <p className="line-clamp-2 text-[13px] font-medium leading-snug text-black dark:text-white">
+              {video.title}
+            </p>
+            <p className="truncate text-xs text-black/50 dark:text-white/50">
+              {sourceHost(video.url)}
+            </p>
+          </button>
+        ))}
+      </div>
+      <Lightbox
+        open={open}
+        close={() => setOpen(false)}
+        slides={slides}
+        index={currentIndex}
+        on={{
+          view: ({ index }) => {
+            const previousIframe = videoRefs.current[currentIndex];
+            if (previousIframe?.contentWindow) {
+              previousIframe.contentWindow.postMessage(
+                '{"event":"command","func":"pauseVideo","args":""}',
+                '*',
+              );
+            }
 
-            const chatModelProvider = localStorage.getItem(
-              'chatModelProviderId',
-            );
-            const chatModel = localStorage.getItem('chatModelKey');
+            setCurrentIndex(index);
+          },
+        }}
+        render={{
+          slide: ({ slide }) => {
+            const index = slides.findIndex((s) => s === slide);
+            if (slide.type !== 'video-slide') return null;
 
-            const res = await fetch(`/api/videos`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                query: query,
-                chatHistory: chatHistory,
-                chatModel: {
-                  providerId: chatModelProvider,
-                  key: chatModel,
-                },
-              }),
-            });
-
-            const data = await res.json();
-
-            const videos = data.videos ?? [];
-            setVideos(videos);
-            setSlides(
-              videos.map((video: Video) => {
-                return {
-                  type: 'video-slide',
-                  iframe_src: video.iframe_src,
-                  src: video.img_src,
-                  url: video.url,
-                  title: video.title,
-                };
-              }),
-            );
-            setLoading(false);
-          }}
-          className="border border-dashed border-light-200 dark:border-dark-200 hover:bg-light-200 dark:hover:bg-dark-200 active:scale-95 duration-200 transition px-4 py-2 flex flex-row items-center justify-between rounded-lg dark:text-white text-sm w-full"
-        >
-          <div className="flex flex-row items-center space-x-2">
-            <VideoIcon size={17} />
-            <p>Search videos</p>
-          </div>
-          <PlusIcon className="text-[#24A0ED]" size={17} />
-        </button>
-      )}
-      {loading && (
-        <div className="grid grid-cols-2 gap-2">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-light-secondary dark:bg-dark-secondary h-32 w-full rounded-lg animate-pulse aspect-video object-cover"
-            />
-          ))}
-        </div>
-      )}
-      {videos !== null && videos.length > 0 && (
-        <>
-          <div className="grid grid-cols-2 gap-2">
-            {videos.length > 4
-              ? videos.slice(0, 3).map((video, i) => (
-                  <div
-                    onClick={() => {
-                      setOpen(true);
-                      setSlides([
-                        slides[i],
-                        ...slides.slice(0, i),
-                        ...slides.slice(i + 1),
-                      ]);
-                    }}
-                    className="relative transition duration-200 active:scale-95 hover:scale-[1.02] cursor-pointer"
-                    key={i}
+            if (!slide.iframe_src) {
+              /* No embeddable player: show the thumbnail and link out */
+              return (
+                <div className="h-full w-full flex flex-col items-center justify-center space-y-4">
+                  <a
+                    href={slide.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative block"
                   >
                     <img
-                      src={video.img_src}
-                      alt={video.title}
-                      className="relative h-full w-full aspect-video object-cover rounded-lg"
+                      src={slide.src}
+                      alt={slide.title}
+                      referrerPolicy="no-referrer"
+                      className="aspect-video max-h-[80vh] w-[95vw] rounded-2xl object-cover md:w-[80vw]"
                     />
-                    <div className="absolute bg-white/70 dark:bg-black/70 text-black/70 dark:text-white/70 px-2 py-1 flex flex-row items-center space-x-1 bottom-1 right-1 rounded-md">
-                      <PlayCircle size={15} />
-                      <p className="text-xs">Video</p>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <PlayCircle
+                        size={64}
+                        className="text-white/90 drop-shadow"
+                      />
                     </div>
-                  </div>
-                ))
-              : videos.map((video, i) => (
-                  <div
-                    onClick={() => {
-                      setOpen(true);
-                      setSlides([
-                        slides[i],
-                        ...slides.slice(0, i),
-                        ...slides.slice(i + 1),
-                      ]);
-                    }}
-                    className="relative transition duration-200 active:scale-95 hover:scale-[1.02] cursor-pointer"
-                    key={i}
+                  </a>
+                  <a
+                    href={slide.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-row items-center space-x-2 rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition"
                   >
-                    <img
-                      src={video.img_src}
-                      alt={video.title}
-                      className="relative h-full w-full aspect-video object-cover rounded-lg"
-                    />
-                    <div className="absolute bg-white/70 dark:bg-black/70 text-black/70 dark:text-white/70 px-2 py-1 flex flex-row items-center space-x-1 bottom-1 right-1 rounded-md">
-                      <PlayCircle size={15} />
-                      <p className="text-xs">Video</p>
-                    </div>
-                  </div>
-                ))}
-            {videos.length > 4 && (
-              <button
-                onClick={() => setOpen(true)}
-                className="bg-light-100 hover:bg-light-200 dark:bg-dark-100 dark:hover:bg-dark-200 transition duration-200 active:scale-95 hover:scale-[1.02] h-auto w-full rounded-lg flex flex-col justify-between text-white p-2"
-              >
-                <div className="flex flex-row items-center space-x-1">
-                  {videos.slice(3, 6).map((video, i) => (
-                    <img
-                      key={i}
-                      src={video.img_src}
-                      alt={video.title}
-                      className="h-6 w-12 rounded-md lg:h-3 lg:w-6 lg:rounded-sm aspect-video object-cover"
-                    />
-                  ))}
+                    <span className="max-w-[70vw] truncate">{slide.title}</span>
+                    <ExternalLink size={15} />
+                  </a>
                 </div>
-                <p className="text-black/70 dark:text-white/70 text-xs">
-                  View {videos.length - 3} more
-                </p>
-              </button>
-            )}
-          </div>
-          <Lightbox
-            open={open}
-            close={() => setOpen(false)}
-            slides={slides}
-            index={currentIndex}
-            on={{
-              view: ({ index }) => {
-                const previousIframe = videoRefs.current[currentIndex];
-                if (previousIframe?.contentWindow) {
-                  previousIframe.contentWindow.postMessage(
-                    '{"event":"command","func":"pauseVideo","args":""}',
-                    '*',
-                  );
-                }
+              );
+            }
 
-                setCurrentIndex(index);
-              },
-            }}
-            render={{
-              slide: ({ slide }) => {
-                const index = slides.findIndex((s) => s === slide);
-                if (slide.type !== 'video-slide') return null;
+            const iframeSrc = slide.iframe_src;
 
-                if (!slide.iframe_src) {
-                  /* No embeddable player: show the thumbnail and link out */
-                  return (
-                    <div className="h-full w-full flex flex-col items-center justify-center space-y-4">
-                      <a
-                        href={slide.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="relative block"
-                      >
-                        <img
-                          src={slide.src}
-                          alt={slide.title}
-                          className="aspect-video max-h-[80vh] w-[95vw] rounded-2xl object-cover md:w-[80vw]"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <PlayCircle
-                            size={64}
-                            className="text-white/90 drop-shadow"
-                          />
-                        </div>
-                      </a>
-                      <a
-                        href={slide.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex flex-row items-center space-x-2 rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition"
-                      >
-                        <span className="max-w-[70vw] truncate">
-                          {slide.title}
-                        </span>
-                        <ExternalLink size={15} />
-                      </a>
-                    </div>
-                  );
-                }
-
-                const iframeSrc = slide.iframe_src;
-
-                return (
-                  <div className="h-full w-full flex flex-row items-center justify-center">
-                    <iframe
-                      src={`${iframeSrc}${iframeSrc.includes('?') ? '&' : '?'}enablejsapi=1`}
-                      ref={(el) => {
-                        if (el) {
-                          videoRefs.current[index] = el;
-                        }
-                      }}
-                      className="aspect-video max-h-[95vh] w-[95vw] rounded-2xl md:w-[80vw]"
-                      allowFullScreen
-                      allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                    />
-                  </div>
-                );
-              },
-            }}
-          />
-        </>
-      )}
+            return (
+              <div className="h-full w-full flex flex-row items-center justify-center">
+                <iframe
+                  src={`${iframeSrc}${iframeSrc.includes('?') ? '&' : '?'}enablejsapi=1`}
+                  ref={(el) => {
+                    if (el) {
+                      videoRefs.current[index] = el;
+                    }
+                  }}
+                  className="aspect-video max-h-[95vh] w-[95vw] rounded-2xl md:w-[80vw]"
+                  allowFullScreen
+                  allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                />
+              </div>
+            );
+          },
+        }}
+      />
     </>
   );
 };
 
-export default Searchvideos;
+export default SearchVideos;

@@ -315,6 +315,9 @@ const readEventStream = async (
   handleLine(buffered + decoder.decode());
 };
 
+/** Fired with a message id when its images and videos should be fetched. */
+export const AUTO_MEDIA_SEARCH_EVENT = 'vane:auto-media-search';
+
 // How often a streaming answer is rendered. Updates arriving in between are
 // merged, since rendering on every token keeps the page too busy to respond.
 const STREAM_RENDER_INTERVAL_MS = 50;
@@ -950,11 +953,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const autoMediaSearch = getAutoMediaSearch();
 
         if (autoMediaSearch) {
-          setTimeout(() => {
-            document.getElementById(`search-images-${messageId}`)?.click();
-
-            document.getElementById(`search-videos-${messageId}`)?.click();
-          }, 200);
+          window.dispatchEvent(
+            new CustomEvent(AUTO_MEDIA_SEARCH_EVENT, { detail: messageId }),
+          );
         }
 
         // Suggest follow-up questions once the answer has some text
