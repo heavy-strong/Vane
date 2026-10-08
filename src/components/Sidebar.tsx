@@ -133,12 +133,12 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             >
               <PanelLeftOpen size={19} />
             </button>
-            <a
+            <Link
               className="p-2.5 rounded-full bg-light-200 text-black/70 dark:bg-dark-200 dark:text-white/70 hover:opacity-70 hover:scale-105 tansition duration-200"
               href="/"
             >
               <Plus size={19} className="cursor-pointer" />
-            </a>
+            </Link>
           </div>
           <VerticalIconContainer>
             {navLinks.map((link, i) => (

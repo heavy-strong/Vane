@@ -97,9 +97,11 @@ class SessionManager {
   emitBlock(block: Block) {
     if (this.ended) return;
     this.blocks.set(block.id, block);
+    // A snapshot, since the block keeps changing and reconnecting clients
+    // replay this event before the appendText events that follow it.
     this.emit('data', {
       type: 'block',
-      block: block,
+      block: structuredClone(block),
     });
   }
 
@@ -117,6 +119,21 @@ class SessionManager {
         type: 'updateBlock',
         blockId: blockId,
         patch: patch,
+      });
+    }
+  }
+
+  /* Appends to a text block and sends only the new text, so a streamed answer
+     costs O(n) to deliver instead of resending everything so far per token. */
+  appendText(blockId: string, delta: string) {
+    const block = this.blocks.get(blockId);
+
+    if (block && block.type === 'text' && !this.ended) {
+      block.data += delta;
+      this.emit('data', {
+        type: 'appendText',
+        blockId: blockId,
+        delta: delta,
       });
     }
   }

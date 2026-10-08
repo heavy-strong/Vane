@@ -139,9 +139,9 @@ const SidebarPanel = ({
       </div>
 
       <div className="px-3">
-        {/* Full navigation (like the rail's button) so the chat state resets. */}
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a
+        {/* Opening / starts a new chat; a full reload would also blank the
+            page and cut off an answer still streaming in. */}
+        <Link
           href="/"
           className="flex items-center gap-2 rounded-xl border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary px-3 py-2 text-sm text-black/80 dark:text-white/80 hover:border-[#24A0ED]/60 transition-colors duration-150"
         >
@@ -152,7 +152,7 @@ const SidebarPanel = ({
               {newQuestionShortcut}
             </kbd>
           )}
-        </a>
+        </Link>
 
         <nav className="mt-3 flex flex-col gap-0.5">
           {navLinks.map((link) => (

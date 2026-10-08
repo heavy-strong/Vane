@@ -1,7 +1,7 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import React, { MutableRefObject, useRef } from 'react';
+import React, { MutableRefObject, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import {
   BookCopy,
@@ -87,40 +87,61 @@ const MessageBox = ({
 
   const { speechStatus, start, stop } = useSpeech({ text: speechMessage });
 
-  const markdownOverrides: MarkdownToJSX.Options = {
-    renderRule(next, node, renderChildren, state) {
-      if (node.type === RuleType.codeInline) {
-        return `\`${node.text}\``;
-      }
+  const markdownOverrides = useMemo<MarkdownToJSX.Options>(
+    () => ({
+      renderRule(next, node, renderChildren, state) {
+        if (node.type === RuleType.codeInline) {
+          return `\`${node.text}\``;
+        }
 
-      if (node.type === RuleType.codeBlock) {
-        return (
-          <CodeBlock key={state.key} language={node.lang || ''}>
-            {node.text}
-          </CodeBlock>
-        );
-      }
+        if (node.type === RuleType.codeBlock) {
+          return (
+            <CodeBlock key={state.key} language={node.lang || ''}>
+              {node.text}
+            </CodeBlock>
+          );
+        }
 
-      return next();
-    },
-    overrides: {
-      think: {
-        component: ThinkTagProcessor,
-        props: {
-          thinkingEnded: thinkingEnded,
+        return next();
+      },
+      overrides: {
+        think: {
+          component: ThinkTagProcessor,
+          props: {
+            thinkingEnded: thinkingEnded,
+          },
+        },
+        citation: {
+          component: Citation,
+        },
+        mathtex: {
+          component: MathTex,
+        },
+        table: {
+          component: TableBlock,
         },
       },
-      citation: {
-        component: Citation,
-      },
-      mathtex: {
-        component: MathTex,
-      },
-      table: {
-        component: TableBlock,
-      },
-    },
-  };
+    }),
+    [thinkingEnded],
+  );
+
+  // Parsing the whole answer is the costliest part of rendering a message;
+  // keeping the element lets React skip it while other state changes, such
+  // as another message streaming in.
+  const renderedMarkdown = useMemo(
+    () => (
+      <Markdown
+        className={cn(
+          'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
+          'max-w-none break-words text-black dark:text-white',
+        )}
+        options={markdownOverrides}
+      >
+        {preprocessMath(parsedMessage)}
+      </Markdown>
+    ),
+    [markdownOverrides, parsedMessage],
+  );
 
   return (
     <div className="space-y-6">
@@ -207,17 +228,7 @@ const MessageBox = ({
             {hasContent && (
               <>
                 <SelectionPopover containerRef={answerRef} />
-                <div ref={answerRef}>
-                  <Markdown
-                    className={cn(
-                      'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
-                      'max-w-none break-words text-black dark:text-white',
-                    )}
-                    options={markdownOverrides}
-                  >
-                    {preprocessMath(parsedMessage)}
-                  </Markdown>
-                </div>
+                <div ref={answerRef}>{renderedMarkdown}</div>
 
                 {loading && isLast ? null : (
                   <div className="flex flex-row items-center justify-between w-full text-black dark:text-white py-4">

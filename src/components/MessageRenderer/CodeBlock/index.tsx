@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckIcon, CopyIcon } from '@phosphor-icons/react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { useTheme } from 'next-themes';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import darkTheme from './CodeBlockDarkTheme';
@@ -64,4 +64,6 @@ const CodeBlock = ({
   );
 };
 
-export default CodeBlock;
+// Highlighting is costly and the answer re-renders as it streams in, so a
+// block is only redone when its own code changes.
+export default memo(CodeBlock);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -107,11 +107,15 @@ const MathTex = ({ tex, display }: { tex: string; display?: string }) => {
     setTimeout(() => setCopied(false), 1000);
   };
 
-  const html = katex.renderToString(source, {
-    displayMode: isDisplay,
-    throwOnError: false,
-    output: 'htmlAndMathml',
-  });
+  const html = useMemo(
+    () =>
+      katex.renderToString(source, {
+        displayMode: isDisplay,
+        throwOnError: false,
+        output: 'htmlAndMathml',
+      }),
+    [source, isDisplay],
+  );
 
   return isDisplay ? (
     <span className="group relative block my-3">
@@ -151,8 +155,9 @@ export const preprocessMath = (markdown: string): string => {
         .replace(/\\\[([\s\S]+?)\\\]/g, (_, tex) => toTag(tex, true))
         .replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => toTag(tex, true))
         .replace(/\\\(([\s\S]+?)\\\)/g, (_, tex) => toTag(tex, false))
-        .replace(/(?<![\\$\w])\$(?![\s$])([^$\n]+?)(?<!\s)\$(?![\w$])/g, (_, tex) =>
-          toTag(tex, false),
+        .replace(
+          /(?<![\\$\w])\$(?![\s$])([^$\n]+?)(?<!\s)\$(?![\w$])/g,
+          (_, tex) => toTag(tex, false),
         );
     })
     .join('');
@@ -169,9 +174,12 @@ export const normalizeMathDelimiters = (markdown: string): string =>
       i % 2 === 1
         ? part
         : part
-            .replace(/\\\[([\s\S]+?)\\\]/g, (_, tex) => `\n$$\n${tex.trim()}\n$$\n`)
+            .replace(
+              /\\\[([\s\S]+?)\\\]/g,
+              (_, tex) => `\n$$\n${tex.trim()}\n$$\n`,
+            )
             .replace(/\\\(([\s\S]+?)\\\)/g, (_, tex) => `$${tex.trim()}$`),
     )
     .join('');
 
-export default MathTex;
+export default memo(MathTex);

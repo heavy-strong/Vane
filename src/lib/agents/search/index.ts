@@ -175,22 +175,8 @@ class SearchAgent {
         session.emitBlock(block);
 
         responseBlockId = block.id;
-      } else {
-        const block = session.getBlock(responseBlockId) as TextBlock | null;
-
-        if (!block) {
-          continue;
-        }
-
-        block.data += chunk.contentChunk;
-
-        session.updateBlock(block.id, [
-          {
-            op: 'replace',
-            path: '/data',
-            value: block.data,
-          },
-        ]);
+      } else if (chunk.contentChunk) {
+        session.appendText(responseBlockId, chunk.contentChunk);
       }
     }
 

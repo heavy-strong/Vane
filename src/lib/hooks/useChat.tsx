@@ -83,6 +83,10 @@ export interface File {
   fileId: string;
 }
 
+type MessageHandler = ((data: any) => Promise<void>) & {
+  flush: () => void;
+};
+
 interface ChatModelProvider {
   key: string;
   providerId: string;
@@ -272,6 +276,136 @@ const loadMessages = async (
   }
 };
 
+/* Feeds each newline-delimited JSON event of an answer stream to `handle`.
+   A line split across chunks is held back until it is complete, so no event
+   is ever handled twice. */
+const readEventStream = async (
+  body: ReadableStream<Uint8Array>,
+  handle: (data: any) => void,
+) => {
+  const reader = body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffered = '';
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+
+    let data: any;
+    try {
+      data = JSON.parse(line);
+    } catch (err) {
+      console.warn('Skipping malformed stream event:', line);
+      return;
+    }
+
+    handle(data);
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffered += decoder.decode(value, { stream: true });
+
+    const lines = buffered.split('\n');
+    buffered = lines.pop() ?? '';
+    lines.forEach(handleLine);
+  }
+
+  handleLine(buffered + decoder.decode());
+};
+
+// How often a streaming answer is rendered. Updates arriving in between are
+// merged, since rendering on every token keeps the page too busy to respond.
+const STREAM_RENDER_INTERVAL_MS = 50;
+
+const buildSection = (msg: Message, suggestionsLoading: boolean): Section => {
+  const textBlocks: string[] = [];
+  let speechMessage = '';
+  let thinkingEnded = false;
+  let suggestions: string[] = [];
+
+  const sourceBlocks = msg.responseBlocks.filter(
+    (block): block is Block & { type: 'source' } => block.type === 'source',
+  );
+  const sources = sourceBlocks.flatMap((block) => block.data);
+
+  const widgetBlocks = msg.responseBlocks
+    .filter((b) => b.type === 'widget')
+    .map((b) => b.data) as Widget[];
+
+  msg.responseBlocks.forEach((block) => {
+    if (block.type === 'text') {
+      let processedText = block.data;
+      const citationRegex = /(?<!\\)\[([^\]]+)\]/g;
+      const regex = /\[(\d+)\]/g;
+
+      if (processedText.includes('<think>')) {
+        const openThinkTag = processedText.match(/<think>/g)?.length || 0;
+        const closeThinkTag = processedText.match(/<\/think>/g)?.length || 0;
+
+        if (openThinkTag && !closeThinkTag) {
+          processedText += '</think> <a> </a>';
+        }
+      }
+
+      if (block.data.includes('</think>')) {
+        thinkingEnded = true;
+      }
+
+      if (sources.length > 0) {
+        processedText = processedText.replace(
+          citationRegex,
+          (_, capturedContent: string) => {
+            const numbers = capturedContent
+              .split(',')
+              .map((numStr) => numStr.trim());
+
+            const linksHtml = numbers
+              .map((numStr) => {
+                const number = parseInt(numStr);
+
+                if (isNaN(number) || number <= 0) {
+                  return `[${numStr}]`;
+                }
+
+                const source = sources[number - 1];
+                const url = source?.metadata?.url;
+
+                if (url) {
+                  return `<citation href="${url}">${numStr}</citation>`;
+                } else {
+                  return ``;
+                }
+              })
+              .join('');
+
+            return linksHtml;
+          },
+        );
+        speechMessage += block.data.replace(regex, '');
+      } else {
+        processedText = processedText.replace(regex, '');
+        speechMessage += block.data.replace(regex, '');
+      }
+
+      textBlocks.push(processedText);
+    } else if (block.type === 'suggestion') {
+      suggestions = block.data;
+    }
+  });
+
+  return {
+    message: msg,
+    parsedTextBlocks: textBlocks,
+    speechMessage,
+    thinkingEnded,
+    suggestions,
+    suggestionsLoading,
+    widgets: widgetBlocks,
+  };
+};
+
 export const chatContext = createContext<ChatContext>({
   chatHistory: [],
   chatId: '',
@@ -318,7 +452,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [chatId, setChatId] = useState<string | undefined>(routeChatId);
   const [newChatCreated, setNewChatCreated] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  // Chat whose answer is being generated. One answer streams at a time, and
+  // it keeps streaming while other pages or chats are open.
+  const [streamingChatId, setStreamingChatId] = useState<string | null>(null);
+  const loading = streamingChatId !== null && streamingChatId === chatId;
   const [suggestionsLoadingId, setSuggestionsLoadingId] = useState<
     string | null
   >(null);
@@ -432,93 +569,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const messagesRef = useRef<Message[]>([]);
 
+  // Sections are kept per message object, so while one message streams in
+  // the others keep theirs (and their rendered output) instead of being
+  // parsed again on every update.
+  const sectionCache = useRef(new WeakMap<Message, Section>());
+
   const sections = useMemo<Section[]>(() => {
     return messages.map((msg) => {
-      const textBlocks: string[] = [];
-      let speechMessage = '';
-      let thinkingEnded = false;
-      let suggestions: string[] = [];
+      const suggestionsLoading = suggestionsLoadingId === msg.messageId;
+      const cached = sectionCache.current.get(msg);
 
-      const sourceBlocks = msg.responseBlocks.filter(
-        (block): block is Block & { type: 'source' } => block.type === 'source',
-      );
-      const sources = sourceBlocks.flatMap((block) => block.data);
+      if (cached && cached.suggestionsLoading === suggestionsLoading) {
+        return cached;
+      }
 
-      const widgetBlocks = msg.responseBlocks
-        .filter((b) => b.type === 'widget')
-        .map((b) => b.data) as Widget[];
-
-      msg.responseBlocks.forEach((block) => {
-        if (block.type === 'text') {
-          let processedText = block.data;
-          const citationRegex = /(?<!\\)\[([^\]]+)\]/g;
-          const regex = /\[(\d+)\]/g;
-
-          if (processedText.includes('<think>')) {
-            const openThinkTag = processedText.match(/<think>/g)?.length || 0;
-            const closeThinkTag =
-              processedText.match(/<\/think>/g)?.length || 0;
-
-            if (openThinkTag && !closeThinkTag) {
-              processedText += '</think> <a> </a>';
-            }
-          }
-
-          if (block.data.includes('</think>')) {
-            thinkingEnded = true;
-          }
-
-          if (sources.length > 0) {
-            processedText = processedText.replace(
-              citationRegex,
-              (_, capturedContent: string) => {
-                const numbers = capturedContent
-                  .split(',')
-                  .map((numStr) => numStr.trim());
-
-                const linksHtml = numbers
-                  .map((numStr) => {
-                    const number = parseInt(numStr);
-
-                    if (isNaN(number) || number <= 0) {
-                      return `[${numStr}]`;
-                    }
-
-                    const source = sources[number - 1];
-                    const url = source?.metadata?.url;
-
-                    if (url) {
-                      return `<citation href="${url}">${numStr}</citation>`;
-                    } else {
-                      return ``;
-                    }
-                  })
-                  .join('');
-
-                return linksHtml;
-              },
-            );
-            speechMessage += block.data.replace(regex, '');
-          } else {
-            processedText = processedText.replace(regex, '');
-            speechMessage += block.data.replace(regex, '');
-          }
-
-          textBlocks.push(processedText);
-        } else if (block.type === 'suggestion') {
-          suggestions = block.data;
-        }
-      });
-
-      return {
-        message: msg,
-        parsedTextBlocks: textBlocks,
-        speechMessage,
-        thinkingEnded,
-        suggestions,
-        suggestionsLoading: suggestionsLoadingId === msg.messageId,
-        widgets: widgetBlocks,
-      };
+      const section = buildSection(msg, suggestionsLoading);
+      sectionCache.current.set(msg, section);
+      return section;
     });
   }, [messages, suggestionsLoadingId]);
 
@@ -530,6 +597,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   // Set when stop is pressed before the server has reported the session id.
   const stopRequestedRef = useRef(false);
 
+  // The answer this client is currently reading a stream for.
+  const activeStreamRef = useRef<{
+    messageId: string;
+    handler: MessageHandler;
+  } | null>(null);
+
+  const readAnswerStream = async (
+    body: ReadableStream<Uint8Array>,
+    message: Message,
+  ) => {
+    const handler = getMessageHandler(message);
+    activeStreamRef.current = { messageId: message.messageId, handler };
+
+    try {
+      await readEventStream(body, handler);
+    } finally {
+      handler.flush();
+      if (activeStreamRef.current?.handler === handler) {
+        activeStreamRef.current = null;
+      }
+    }
+  };
+
   const checkReconnect = async () => {
     if (isReconnectingRef.current) return;
 
@@ -540,7 +630,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       const lastMsg = messages[messages.length - 1];
 
       if (lastMsg.status === 'answering') {
-        setLoading(true);
+        setStreamingChatId(lastMsg.chatId);
+
+        // This client is still reading the answer (the chat was left and
+        // opened again), so show what it has instead of a second stream.
+        const activeStream = activeStreamRef.current;
+        if (activeStream?.messageId === lastMsg.messageId) {
+          activeStream.handler.flush();
+          return;
+        }
+
         setResearchEnded(false);
         setMessageAppeared(false);
 
@@ -548,38 +647,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         activeSessionIdRef.current = lastMsg.backendId;
         stopRequestedRef.current = false;
 
-        const res = await fetch(`/api/reconnect/${lastMsg.backendId}`, {
-          method: 'POST',
-        });
-
-        if (!res.body) throw new Error('No response body');
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder('utf-8');
-
-        let partialChunk = '';
-
-        const messageHandler = getMessageHandler(lastMsg);
-
         try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+          const res = await fetch(`/api/reconnect/${lastMsg.backendId}`, {
+            method: 'POST',
+          });
 
-            partialChunk += decoder.decode(value, { stream: true });
-
-            try {
-              const messages = partialChunk.split('\n');
-              for (const msg of messages) {
-                if (!msg.trim()) continue;
-                const json = JSON.parse(msg);
-                messageHandler(json);
-              }
-              partialChunk = '';
-            } catch (error) {
-              console.warn('Incomplete JSON, waiting for next chunk...');
-            }
+          // The server no longer has the session, so nothing will end it.
+          if (!res.ok || !res.body) {
+            setStreamingChatId(null);
+            return;
           }
+
+          await readAnswerStream(res.body, lastMsg);
         } finally {
           isReconnectingRef.current = false;
         }
@@ -597,7 +676,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+
   useEffect(() => {
+    // Only a new chat or a different one starts over. Other pages keep the
+    // open chat, and any answer streaming into it, so coming back shows it
+    // straight away; and a new chat's URL becoming /c/<id> once its first
+    // message is sent is still the same chat.
+    if (routeChatId ? routeChatId === chatIdRef.current : pathname !== '/') {
+      return;
+    }
+
     setChatId(routeChatId);
     setMessages([]);
     chatHistory.current = [];
@@ -654,7 +744,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   /* Answers the message again, with `query` in place of the original
      question when it was edited. Every later message is dropped. */
   const rewrite = (messageId: string, query?: string) => {
-    if (loading) return;
+    if (streamingChatId) return;
 
     const index = messages.findIndex((msg) => msg.messageId === messageId);
 
@@ -679,20 +769,55 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfigReady, isReady, initialMessage]);
 
-  const getMessageHandler = (message: Message) => {
+  /* Applies the events of one answer's stream. The message is updated here
+     as events arrive and rendered at most every STREAM_RENDER_INTERVAL_MS;
+     `flush` renders it right away. */
+  const getMessageHandler = (message: Message): MessageHandler => {
     const messageId = message.messageId;
 
-    return async (data: any) => {
+    let current = message;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+
+      const latest = current;
+      setMessages((prev) =>
+        prev.map((msg) => (msg.messageId === messageId ? latest : msg)),
+      );
+    };
+
+    const update = (
+      change: (msg: Message) => Message,
+      { immediate = false } = {},
+    ) => {
+      current = change(current);
+
+      if (immediate) {
+        flush();
+      } else if (!flushTimer) {
+        flushTimer = setTimeout(flush, STREAM_RENDER_INTERVAL_MS);
+      }
+    };
+
+    const updateBlock = (blockId: string, change: (block: Block) => Block) =>
+      update((msg) => ({
+        ...msg,
+        responseBlocks: msg.responseBlocks.map((block) =>
+          block.id === blockId ? change(block) : block,
+        ),
+      }));
+
+    const handle = async (data: any) => {
       if (data.type === 'session') {
         activeSessionIdRef.current = data.sessionId;
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.messageId === messageId
-              ? { ...msg, backendId: data.sessionId }
-              : msg,
-          ),
-        );
-        if (stopRequestedRef.current) requestStop(data.sessionId, message);
+        update((msg) => ({ ...msg, backendId: data.sessionId }), {
+          immediate: true,
+        });
+        if (stopRequestedRef.current) requestStop(data.sessionId);
         return;
       }
 
@@ -700,35 +825,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         activeSessionIdRef.current = null;
         stopRequestedRef.current = false;
         toast.error(data.data);
-        setLoading(false);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.messageId === messageId
-              ? { ...msg, status: 'error' as const }
-              : msg,
-          ),
-        );
+        setStreamingChatId(null);
+        update((msg) => ({ ...msg, status: 'error' as const }), {
+          immediate: true,
+        });
         return;
       }
 
       if (data.type === 'modelInfo') {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.messageId === messageId
-              ? {
-                  ...msg,
-                  modelName: data.modelName,
-                  modelProvider: data.modelProvider,
-                }
-              : msg,
-          ),
-        );
+        update((msg) => ({
+          ...msg,
+          modelName: data.modelName,
+          modelProvider: data.modelProvider,
+        }));
       }
 
       if (data.type === 'researchComplete') {
         setResearchEnded(true);
         if (
-          message.responseBlocks.find(
+          current.responseBlocks.find(
             (b) => b.type === 'source' && b.data.length > 0,
           )
         ) {
@@ -737,31 +852,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.type === 'block') {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.messageId === messageId) {
-              const exists = msg.responseBlocks.findIndex(
-                (b) => b.id === data.block.id,
-              );
+        update((msg) => {
+          const exists = msg.responseBlocks.findIndex(
+            (b) => b.id === data.block.id,
+          );
 
-              if (exists !== -1) {
-                const existingBlocks = [...msg.responseBlocks];
-                existingBlocks[exists] = data.block;
+          if (exists !== -1) {
+            const existingBlocks = [...msg.responseBlocks];
+            existingBlocks[exists] = data.block;
 
-                return {
-                  ...msg,
-                  responseBlocks: existingBlocks,
-                };
-              }
+            return {
+              ...msg,
+              responseBlocks: existingBlocks,
+            };
+          }
 
-              return {
-                ...msg,
-                responseBlocks: [...msg.responseBlocks, data.block],
-              };
-            }
-            return msg;
-          }),
-        );
+          return {
+            ...msg,
+            responseBlocks: [...msg.responseBlocks, data.block],
+          };
+        });
 
         if (
           (data.block.type === 'source' && data.block.data.length > 0) ||
@@ -772,21 +882,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.type === 'updateBlock') {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.messageId === messageId) {
-              const updatedBlocks = msg.responseBlocks.map((block) => {
-                if (block.id === data.blockId) {
-                  const updatedBlock = { ...block };
-                  applyPatch(updatedBlock, data.patch);
-                  return updatedBlock;
-                }
-                return block;
-              });
-              return { ...msg, responseBlocks: updatedBlocks };
-            }
-            return msg;
-          }),
+        updateBlock(data.blockId, (block) => {
+          const updatedBlock = { ...block };
+          applyPatch(updatedBlock, data.patch);
+          return updatedBlock;
+        });
+      }
+
+      if (data.type === 'appendText') {
+        updateBlock(data.blockId, (block) =>
+          block.type === 'text'
+            ? { ...block, data: block.data + data.delta }
+            : block,
         );
       }
 
@@ -802,21 +909,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const stopped = data.stopped === true;
 
-        const currentMsg = messagesRef.current.find(
-          (msg) => msg.messageId === messageId,
-        );
+        // The answer may finish while another chat is open, whose history
+        // this must not touch.
+        const isOpenChat = chatIdRef.current === message.chatId;
 
         const newHistory: [string, string][] = [
-          ...chatHistory.current,
+          ...(isOpenChat ? chatHistory.current : []),
           ['human', message.query],
           [
             'assistant',
-            currentMsg?.responseBlocks.find((b) => b.type === 'text')?.data ||
-              '',
+            current.responseBlocks.find((b) => b.type === 'text')?.data || '',
           ],
         ];
 
-        chatHistory.current = newHistory;
+        if (isOpenChat) chatHistory.current = newHistory;
 
         if (!stopped) {
           notifySearchComplete(
@@ -825,45 +931,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           );
         }
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.messageId === messageId
-              ? {
-                  ...msg,
-                  status: 'completed' as const,
-                  durationMs:
-                    typeof data.durationMs === 'number'
-                      ? data.durationMs
-                      : msg.durationMs,
-                }
-              : msg,
-          ),
+        update(
+          (msg) => ({
+            ...msg,
+            status: 'completed' as const,
+            durationMs:
+              typeof data.durationMs === 'number'
+                ? data.durationMs
+                : msg.durationMs,
+          }),
+          { immediate: true },
         );
 
-        setLoading(false);
+        setStreamingChatId(null);
 
         if (stopped) return;
-
-        const lastMsg = messagesRef.current[messagesRef.current.length - 1];
 
         const autoMediaSearch = getAutoMediaSearch();
 
         if (autoMediaSearch) {
           setTimeout(() => {
-            document
-              .getElementById(`search-images-${lastMsg.messageId}`)
-              ?.click();
+            document.getElementById(`search-images-${messageId}`)?.click();
 
-            document
-              .getElementById(`search-videos-${lastMsg.messageId}`)
-              ?.click();
+            document.getElementById(`search-videos-${messageId}`)?.click();
           }, 200);
         }
 
         // Suggest follow-up questions once the answer has some text
 
         const hasAnswer = newHistory[newHistory.length - 1][1].trim() !== '';
-        const hasSuggestions = currentMsg?.responseBlocks.some(
+        const hasSuggestions = current.responseBlocks.some(
           (block) => block.type === 'suggestion',
         );
 
@@ -885,23 +982,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             data: suggestions,
           };
 
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.messageId === messageId) {
-                return {
-                  ...msg,
-                  responseBlocks: [...msg.responseBlocks, suggestionBlock],
-                };
-              }
-              return msg;
+          update(
+            (msg) => ({
+              ...msg,
+              responseBlocks: [...msg.responseBlocks, suggestionBlock],
             }),
+            { immediate: true },
           );
         }
       }
     };
+
+    return Object.assign(handle, { flush });
   };
 
-  const requestStop = async (sessionId: string, message: Message) => {
+  const requestStop = async (sessionId: string) => {
     stopRequestedRef.current = false;
 
     try {
@@ -918,7 +1013,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     // The server no longer has the session, so nothing will end the stream.
-    getMessageHandler(message)({ type: 'messageEnd', stopped: true });
+    const activeStream = activeStreamRef.current;
+    if (activeStream) {
+      activeStream.handler({ type: 'messageEnd', stopped: true });
+    } else {
+      setStreamingChatId(null);
+    }
   };
 
   const stopMessage = () => {
@@ -930,7 +1030,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const sessionId = activeSessionIdRef.current;
 
     if (sessionId) {
-      requestStop(sessionId, message);
+      requestStop(sessionId);
     } else {
       stopRequestedRef.current = true;
     }
@@ -940,7 +1040,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     message,
     messageId,
   ) => {
-    if (loading || !message) return;
+    if (!message) return;
+    if (streamingChatId) {
+      if (streamingChatId !== chatId) {
+        toast.error('Wait for the answer in the other chat to finish.');
+      }
+      return;
+    }
     if (!chatModelProvider.providerId || !chatModelProvider.key) {
       toast.error('Select a chat model before sending a message.');
       return;
@@ -952,7 +1058,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     promptForNotificationPermission();
     activeSessionIdRef.current = null;
     stopRequestedRef.current = false;
-    setLoading(true);
+    setStreamingChatId(chatId!);
     setResearchEnded(false);
     setMessageAppeared(false);
 
@@ -961,6 +1067,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     messageId = messageId ?? crypto.randomBytes(7).toString('hex');
+    // A rewritten answer reuses the id of the one it replaces.
+    handledMessageEndRef.current.delete(messageId);
     const backendId = crypto.randomBytes(20).toString('hex');
 
     const newMessage: Message = {
@@ -1026,31 +1134,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       notifyLibraryChanged();
     }
 
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder('utf-8');
-
-    let partialChunk = '';
-
-    const messageHandler = getMessageHandler(newMessage);
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      partialChunk += decoder.decode(value, { stream: true });
-
-      try {
-        const messages = partialChunk.split('\n');
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const json = JSON.parse(msg);
-          messageHandler(json);
-        }
-        partialChunk = '';
-      } catch (error) {
-        console.warn('Incomplete JSON, waiting for next chunk...');
-      }
-    }
+    await readAnswerStream(res.body, newMessage);
   };
 
   return (
