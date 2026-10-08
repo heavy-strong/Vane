@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Settings } from 'lucide-react';
-import EmptyChatMessageInput from './EmptyChatMessageInput';
+import MessageInput from './MessageInput';
 import { File } from './ChatWindow';
 import Link from 'next/link';
 import WeatherWidget from './WeatherWidget';
@@ -51,7 +51,7 @@ const EmptyChat = () => {
           <h2 className="text-black/70 dark:text-white/70 text-3xl font-medium -mt-8">
             Research begins here.
           </h2>
-          <EmptyChatMessageInput />
+          <MessageInput placeholder="Ask anything..." autoFocus />
         </div>
         {(showWeather || showNews) && (
           <div className="flex flex-col w-full gap-4 mt-2 sm:flex-row sm:justify-center">

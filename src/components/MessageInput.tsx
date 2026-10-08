@@ -1,42 +1,22 @@
-import { cn } from '@/lib/utils';
-import { ArrowUp } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
-import AttachSmall from './MessageInputActions/AttachSmall';
-import ModelSelector from './MessageInputActions/ChatModelSelector';
 import Sources from './MessageInputActions/Sources';
 import Optimization from './MessageInputActions/Optimization';
+import Attach from './MessageInputActions/Attach';
 import { useChat } from '@/lib/hooks/useChat';
+import ModelSelector from './MessageInputActions/ChatModelSelector';
 
-const MessageInput = () => {
+const MessageInput = ({
+  placeholder = 'Ask a follow-up',
+  autoFocus = false,
+}: {
+  placeholder?: string;
+  autoFocus?: boolean;
+}) => {
   const { loading, sendMessage } = useChat();
 
-  const [copilotEnabled, setCopilotEnabled] = useState(false);
   const [message, setMessage] = useState('');
-  const [textareaRows, setTextareaRows] = useState(1);
-  const [mode, setMode] = useState<'multi' | 'single'>('single');
-
-  useEffect(() => {
-    if (textareaRows >= 2 && message && mode === 'single') {
-      setMode('multi');
-    } else if (!message && mode === 'multi') {
-      setMode('single');
-    }
-  }, [textareaRows, mode, message]);
-
-  // The single-row layout has no room for the textarea next to the actions
-  // on narrow screens, so always stack them there.
-  const [isNarrow, setIsNarrow] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 639px)');
-    const sync = () => setIsNarrow(query.matches);
-    sync();
-    query.addEventListener('change', sync);
-    return () => query.removeEventListener('change', sync);
-  }, []);
-
-  const layout = isNarrow ? 'multi' : mode;
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -57,73 +37,59 @@ const MessageInput = () => {
 
     document.addEventListener('keydown', handleKeyDown);
 
+    if (autoFocus) inputRef.current?.focus();
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [autoFocus]);
+
+  const submit = () => {
+    if (loading || message.trim().length === 0) return;
+    sendMessage(message);
+    setMessage('');
+  };
 
   return (
     <form
       onSubmit={(e) => {
-        if (loading) return;
         e.preventDefault();
-        sendMessage(message);
-        setMessage('');
+        submit();
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !loading) {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          sendMessage(message);
-          setMessage('');
+          submit();
         }
       }}
-      className={cn(
-        'relative bg-light-secondary dark:bg-dark-secondary p-4 flex items-center overflow-visible border border-light-200 dark:border-dark-200 shadow-sm shadow-light-200/10 dark:shadow-black/20 transition-all duration-200 focus-within:border-light-300 dark:focus-within:border-dark-300',
-        layout === 'multi' ? 'flex-col rounded-2xl' : 'flex-row rounded-full',
-      )}
+      className="relative w-full"
     >
-      {layout === 'single' && (
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col bg-light-secondary dark:bg-dark-secondary px-3 pt-5 pb-3 rounded-2xl w-full border border-light-200 dark:border-dark-200 shadow-sm shadow-light-200/10 dark:shadow-black/20 transition-all duration-200 focus-within:border-light-300 dark:focus-within:border-dark-300">
+        <TextareaAutosize
+          ref={inputRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          minRows={2}
+          className="px-2 bg-transparent placeholder:text-[15px] placeholder:text-black/50 dark:placeholder:text-white/50 text-sm text-black dark:text-white resize-none focus:outline-none w-full max-h-24 lg:max-h-36 xl:max-h-48"
+          placeholder={placeholder}
+        />
+        <div className="flex flex-row items-center justify-between mt-4">
           <Optimization />
-          <Sources />
-          <AttachSmall />
-          <ModelSelector align="start" />
-        </div>
-      )}
-      <TextareaAutosize
-        ref={inputRef}
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onHeightChange={(height, props) => {
-          setTextareaRows(Math.ceil(height / props.rowHeight));
-        }}
-        className="transition bg-transparent dark:placeholder:text-white/50 placeholder:text-sm text-sm dark:text-white resize-none focus:outline-none w-full px-2 max-h-24 lg:max-h-36 xl:max-h-48 flex-grow flex-shrink"
-        placeholder="Ask a follow-up"
-      />
-      {layout === 'single' && (
-        <button
-          disabled={message.trim().length === 0 || loading}
-          className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
-        >
-          <ArrowUp className="bg-background" size={17} />
-        </button>
-      )}
-      {layout === 'multi' && (
-        <div className="flex flex-row items-center justify-between w-full pt-2">
-          <div className="flex items-center gap-1">
-            <Optimization />
-            <Sources />
-            <AttachSmall />
-            <ModelSelector align="start" />
+          <div className="flex flex-row items-center space-x-2">
+            <div className="flex flex-row items-center space-x-1">
+              <Sources />
+              <ModelSelector />
+              <Attach />
+            </div>
+            <button
+              disabled={message.trim().length === 0 || loading}
+              className="bg-sky-500 text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2"
+            >
+              <ArrowRight className="bg-background" size={17} />
+            </button>
           </div>
-          <button
-            disabled={message.trim().length === 0 || loading}
-            className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
-          >
-            <ArrowUp className="bg-background" size={17} />
-          </button>
         </div>
-      )}
+      </div>
     </form>
   );
 };
