@@ -38,6 +38,7 @@ export type Section = {
   speechMessage: string;
   thinkingEnded: boolean;
   suggestions?: string[];
+  suggestionsLoading: boolean;
 };
 
 type ChatContext = {
@@ -65,12 +66,8 @@ type ChatContext = {
   setSources: (sources: string[]) => void;
   setFiles: (files: File[]) => void;
   setFileIds: (fileIds: string[]) => void;
-  sendMessage: (
-    message: string,
-    messageId?: string,
-    rewrite?: boolean,
-  ) => Promise<void>;
-  rewrite: (messageId: string) => void;
+  sendMessage: (message: string, messageId?: string) => Promise<void>;
+  rewrite: (messageId: string, query?: string) => void;
   stopMessage: () => void;
   setChatModelProvider: (provider: ChatModelProvider) => void;
   setChatThinkingEnabled: (enabled?: boolean) => void;
@@ -322,6 +319,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [newChatCreated, setNewChatCreated] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [suggestionsLoadingId, setSuggestionsLoadingId] = useState<
+    string | null
+  >(null);
   const [messageAppeared, setMessageAppeared] = useState(false);
 
   const [researchEnded, setResearchEnded] = useState(false);
@@ -516,10 +516,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         speechMessage,
         thinkingEnded,
         suggestions,
+        suggestionsLoading: suggestionsLoadingId === msg.messageId,
         widgets: widgetBlocks,
       };
     });
-  }, [messages]);
+  }, [messages, suggestionsLoadingId]);
 
   const isReconnectingRef = useRef(false);
   const handledMessageEndRef = useRef<Set<string>>(new Set());
@@ -650,7 +651,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isMessagesLoaded, isConfigReady, newChatCreated]);
 
-  const rewrite = (messageId: string) => {
+  /* Answers the message again, with `query` in place of the original
+     question when it was edited. Every later message is dropped. */
+  const rewrite = (messageId: string, query?: string) => {
+    if (loading) return;
+
     const index = messages.findIndex((msg) => msg.messageId === messageId);
 
     if (index === -1) return;
@@ -660,7 +665,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     chatHistory.current = chatHistory.current.slice(0, index * 2);
 
     const messageToRewrite = messages[index];
-    sendMessage(messageToRewrite.query, messageToRewrite.messageId, true);
+    sendMessage(query ?? messageToRewrite.query, messageToRewrite.messageId);
   };
 
   useEffect(() => {
@@ -855,17 +860,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           }, 200);
         }
 
-        // Check if there are sources and no suggestions
+        // Suggest follow-up questions once the answer has some text
 
-        const hasSourceBlocks = currentMsg?.responseBlocks.some(
-          (block) => block.type === 'source' && block.data.length > 0,
-        );
+        const hasAnswer = newHistory[newHistory.length - 1][1].trim() !== '';
         const hasSuggestions = currentMsg?.responseBlocks.some(
           (block) => block.type === 'suggestion',
         );
 
-        if (hasSourceBlocks && !hasSuggestions) {
-          const suggestions = await getSuggestions(newHistory);
+        if (hasAnswer && !hasSuggestions) {
+          setSuggestionsLoadingId(messageId);
+
+          const suggestions = await getSuggestions(newHistory, {
+            chatId: message.chatId,
+            messageId,
+          });
+
+          setSuggestionsLoadingId((id) => (id === messageId ? null : id));
+
+          if (suggestions.length === 0) return;
+
           const suggestionBlock: Block = {
             id: crypto.randomBytes(7).toString('hex'),
             type: 'suggestion',
@@ -926,7 +939,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const sendMessage: ChatContext['sendMessage'] = async (
     message,
     messageId,
-    rewrite = false,
   ) => {
     if (loading || !message) return;
     if (!chatModelProvider.providerId || !chatModelProvider.key) {
@@ -964,7 +976,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     setMessages((prevMessages) => [...prevMessages, newMessage]);
 
     const isFirstMessage = messages.length === 0;
-    const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -982,12 +993,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         files: fileIds,
         sources: sources,
         optimizationMode: optimizationMode,
-        history: rewrite
-          ? chatHistory.current.slice(
-              0,
-              messageIndex === -1 ? undefined : messageIndex,
-            )
-          : chatHistory.current,
+        // rewrite() has already cut the history back to this message.
+        history: chatHistory.current,
         chatModel: {
           key: chatModelProvider.key,
           providerId: chatModelProvider.providerId,

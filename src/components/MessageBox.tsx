@@ -8,12 +8,9 @@ import {
   Disc3,
   Volume2,
   StopCircle,
-  Layers3,
-  Plus,
   CornerDownRight,
   Cpu,
   Clock,
-  Quote,
 } from 'lucide-react';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
@@ -33,7 +30,7 @@ import CodeBlock from './MessageRenderer/CodeBlock';
 import TableBlock from './MessageRenderer/TableBlock';
 import MathTex, { preprocessMath } from './MessageRenderer/MathTex';
 import SelectionPopover from './SelectionPopover';
-import { parseQuotedMessage } from '@/lib/quote';
+import MessageQuestion from './MessageQuestion';
 
 const formatDuration = (ms: number) => {
   if (ms < 1000) return `${ms}ms`;
@@ -88,10 +85,6 @@ const MessageBox = ({
 
   const answerRef = useRef<HTMLDivElement | null>(null);
 
-  const { quote, message: queryMessage } = parseQuotedMessage(
-    section.message.query,
-  );
-
   const { speechStatus, start, stop } = useSpeech({ text: speechMessage });
 
   const markdownOverrides: MarkdownToJSX.Options = {
@@ -131,22 +124,7 @@ const MessageBox = ({
 
   return (
     <div className="space-y-6">
-      <div className={'w-full pt-8 break-words'}>
-        {quote && (
-          <div className="flex flex-row items-start gap-2 mb-3 lg:w-9/12 pl-3 border-l-2 border-light-300 dark:border-dark-300">
-            <Quote
-              size={14}
-              className="shrink-0 mt-1 text-black/40 dark:text-white/40"
-            />
-            <p className="text-sm text-black/60 dark:text-white/60 line-clamp-3 whitespace-pre-line">
-              {quote}
-            </p>
-          </div>
-        )}
-        <h2 className="text-black dark:text-white font-medium text-3xl lg:w-9/12">
-          {queryMessage}
-        </h2>
-      </div>
+      <MessageQuestion message={section.message} />
 
       <div className="flex flex-col space-y-9 lg:space-y-0 lg:flex-row lg:justify-between lg:space-x-9">
         <div
@@ -303,49 +281,49 @@ const MessageBox = ({
                 )}
 
                 {isLast &&
-                  section.suggestions &&
-                  section.suggestions.length > 0 &&
                   hasContent &&
-                  !loading && (
-                    <div className="mt-6">
-                      <div className="flex flex-row items-center space-x-2 mb-4">
-                        <Layers3
-                          className="text-black dark:text-white"
-                          size={20}
-                        />
-                        <h3 className="text-black dark:text-white font-medium text-xl">
-                          Related
-                        </h3>
-                      </div>
-                      <div className="space-y-0">
-                        {section.suggestions.map(
-                          (suggestion: string, i: number) => (
-                            <div key={i}>
-                              <div className="h-px bg-light-200/40 dark:bg-dark-200/40" />
-                              <button
-                                onClick={() => sendMessage(suggestion)}
-                                className="group w-full py-4 text-left transition-colors duration-200"
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex flex-row space-x-3 items-center">
-                                    <CornerDownRight
-                                      size={15}
-                                      className="group-hover:text-sky-400 transition-colors duration-200 flex-shrink-0"
-                                    />
-                                    <p className="text-sm text-black/70 dark:text-white/70 group-hover:text-sky-400 transition-colors duration-200 leading-relaxed">
-                                      {suggestion}
-                                    </p>
-                                  </div>
-                                  <Plus
-                                    size={16}
-                                    className="text-black/40 dark:text-white/40 group-hover:text-sky-400 transition-colors duration-200 flex-shrink-0"
-                                  />
-                                </div>
-                              </button>
+                  !loading &&
+                  (section.suggestionsLoading ||
+                    (section.suggestions?.length ?? 0) > 0) && (
+                    <div className="mt-4 pt-3 border-t border-light-200/60 dark:border-dark-200/60">
+                      {section.suggestionsLoading ? (
+                        <div className="flex flex-col animate-pulse">
+                          {[0, 1, 2].map((i) => (
+                            <div
+                              key={i}
+                              className="flex flex-row items-center gap-3 px-2 py-2.5"
+                            >
+                              <div className="h-3.5 w-3.5 rounded bg-light-secondary dark:bg-dark-secondary flex-shrink-0" />
+                              <div
+                                className={cn(
+                                  'h-3.5 rounded-full bg-light-secondary dark:bg-dark-secondary',
+                                  i === 1 ? 'w-1/3' : 'w-1/2',
+                                )}
+                              />
                             </div>
-                          ),
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col">
+                          {section.suggestions!.map(
+                            (suggestion: string, i: number) => (
+                              <button
+                                key={i}
+                                onClick={() => sendMessage(suggestion)}
+                                className="group flex flex-row items-start gap-3 px-2 py-2.5 rounded-lg text-left hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200"
+                              >
+                                <CornerDownRight
+                                  size={15}
+                                  className="mt-0.5 text-black/50 dark:text-white/50 group-hover:text-black dark:group-hover:text-white transition-colors duration-200 flex-shrink-0"
+                                />
+                                <span className="text-sm text-black/70 dark:text-white/70 group-hover:text-black dark:group-hover:text-white transition-colors duration-200 leading-snug">
+                                  {suggestion}
+                                </span>
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
               </>

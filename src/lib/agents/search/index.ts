@@ -45,6 +45,8 @@ class SearchAgent {
         .set({
           status: 'answering',
           backendId: session.id,
+          query: input.followUp,
+          createdAt: new Date().toISOString(),
           responseBlocks: [],
           modelName: input.config.modelInfo?.modelName ?? null,
           modelProvider: input.config.modelInfo?.providerName ?? null,
@@ -204,22 +206,26 @@ class SearchAgent {
   ) {
     const durationMs = Date.now() - startedAt;
 
-    session.emit('end', { durationMs, stopped: session.signal.aborted });
-
-    await db
-      .update(messages)
-      .set({
-        status: 'completed',
-        responseBlocks: session.getAllBlocks(),
-        durationMs,
-      })
-      .where(
-        and(
-          eq(messages.chatId, input.chatId),
-          eq(messages.messageId, input.messageId),
-        ),
-      )
-      .execute();
+    /* Saved before announcing the end, so follow-up writes made by the client
+       (such as suggestions) are not overwritten by this one. */
+    try {
+      await db
+        .update(messages)
+        .set({
+          status: 'completed',
+          responseBlocks: session.getAllBlocks(),
+          durationMs,
+        })
+        .where(
+          and(
+            eq(messages.chatId, input.chatId),
+            eq(messages.messageId, input.messageId),
+          ),
+        )
+        .execute();
+    } finally {
+      session.emit('end', { durationMs, stopped: session.signal.aborted });
+    }
   }
 }
 

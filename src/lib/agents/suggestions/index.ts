@@ -1,5 +1,5 @@
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
-import { suggestionGeneratorPrompt } from '@/lib/prompts/suggestions';
+import { getSuggestionGeneratorPrompt } from '@/lib/prompts/suggestions';
 import { ChatTurnMessage } from '@/lib/types';
 import z from 'zod';
 import BaseLLM from '@/lib/models/base/llm';
@@ -22,7 +22,7 @@ const generateSuggestions = async (
     messages: [
       {
         role: 'system',
-        content: suggestionGeneratorPrompt,
+        content: getSuggestionGeneratorPrompt(),
       },
       {
         role: 'user',
@@ -32,7 +32,10 @@ const generateSuggestions = async (
     schema,
   });
 
-  return res.suggestions;
+  return res.suggestions
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 5);
 };
 
 export default generateSuggestions;

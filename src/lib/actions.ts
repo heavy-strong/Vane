@@ -1,24 +1,36 @@
-export const getSuggestions = async (chatHistory: [string, string][]) => {
+export const getSuggestions = async (
+  chatHistory: [string, string][],
+  target?: { chatId: string; messageId: string },
+): Promise<string[]> => {
   const chatModel = localStorage.getItem('chatModelKey');
   const chatModelProvider = localStorage.getItem('chatModelProviderId');
 
-  const res = await fetch(`/api/suggestions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      chatHistory,
-      chatModel: {
-        providerId: chatModelProvider,
-        key: chatModel,
+  try {
+    const res = await fetch(`/api/suggestions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    }),
-  });
+      body: JSON.stringify({
+        chatHistory,
+        chatModel: {
+          providerId: chatModelProvider,
+          key: chatModel,
+        },
+        chatId: target?.chatId,
+        messageId: target?.messageId,
+      }),
+    });
 
-  const data = (await res.json()) as { suggestions: string[] };
+    if (!res.ok) return [];
 
-  return data.suggestions;
+    const data = (await res.json()) as { suggestions?: string[] };
+
+    return Array.isArray(data.suggestions) ? data.suggestions : [];
+  } catch (err) {
+    console.error('An error occurred while getting suggestions:', err);
+    return [];
+  }
 };
 
 export const getApproxLocation = async () => {
