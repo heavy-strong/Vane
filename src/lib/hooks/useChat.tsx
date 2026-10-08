@@ -76,6 +76,8 @@ type ChatContext = {
   setChatThinkingEnabled: (enabled?: boolean) => void;
   setChatReasoningEffort: (effort?: ReasoningEffort) => void;
   setEmbeddingModelProvider: (provider: EmbeddingModelProvider) => void;
+  quotedText: string;
+  setQuotedText: (text: string) => void;
 };
 
 export interface File {
@@ -305,6 +307,8 @@ export const chatContext = createContext<ChatContext>({
   setChatReasoningEffort: () => {},
   setEmbeddingModelProvider: () => {},
   setResearchEnded: () => {},
+  quotedText: '',
+  setQuotedText: () => {},
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
@@ -327,6 +331,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [files, setFiles] = useState<File[]>([]);
   const [fileIds, setFileIds] = useState<string[]>([]);
+
+  const [quotedText, setQuotedText] = useState('');
 
   const [sources, setSources] = useState<string[]>(['web']);
   const [optimizationMode, setOptimizationMode] = useState('speed');
@@ -596,6 +602,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     chatHistory.current = [];
     setFiles([]);
     setFileIds([]);
+    setQuotedText('');
     setSources(['web']);
     setIsMessagesLoaded(false);
     setNotFound(false);
@@ -1073,6 +1080,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setEmbeddingModelProvider,
         researchEnded,
         setResearchEnded,
+        quotedText,
+        setQuotedText,
       }}
     >
       {children}

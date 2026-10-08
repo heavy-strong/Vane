@@ -1,4 +1,4 @@
-import { ArrowRight, Square } from 'lucide-react';
+import { ArrowRight, Quote, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import Sources from './MessageInputActions/Sources';
@@ -6,6 +6,7 @@ import Optimization from './MessageInputActions/Optimization';
 import Attach from './MessageInputActions/Attach';
 import { useChat } from '@/lib/hooks/useChat';
 import ModelSelector from './MessageInputActions/ChatModelSelector';
+import { buildQuotedMessage } from '@/lib/quote';
 
 const MessageInput = ({
   placeholder = 'Ask a follow-up',
@@ -14,7 +15,8 @@ const MessageInput = ({
   placeholder?: string;
   autoFocus?: boolean;
 }) => {
-  const { loading, sendMessage, stopMessage } = useChat();
+  const { loading, sendMessage, stopMessage, quotedText, setQuotedText } =
+    useChat();
 
   const [message, setMessage] = useState('');
 
@@ -44,10 +46,17 @@ const MessageInput = ({
     };
   }, [autoFocus]);
 
+  useEffect(() => {
+    if (quotedText) inputRef.current?.focus();
+  }, [quotedText]);
+
   const submit = () => {
     if (loading || message.trim().length === 0) return;
-    sendMessage(message);
+    sendMessage(
+      quotedText ? buildQuotedMessage(quotedText, message.trim()) : message,
+    );
     setMessage('');
+    setQuotedText('');
   };
 
   return (
@@ -65,13 +74,32 @@ const MessageInput = ({
       className="relative w-full"
     >
       <div className="flex flex-col bg-light-secondary dark:bg-dark-secondary px-3 pt-5 pb-3 rounded-2xl w-full border border-light-200 dark:border-dark-200 shadow-sm shadow-light-200/10 dark:shadow-black/20 transition-all duration-200 focus-within:border-light-300 dark:focus-within:border-dark-300">
+        {quotedText && (
+          <div className="flex flex-row items-start gap-2 mx-2 -mt-2 mb-3 px-3 py-2 rounded-lg bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200">
+            <Quote
+              size={14}
+              className="shrink-0 mt-0.5 text-black/40 dark:text-white/40"
+            />
+            <p className="flex-1 text-xs text-black/70 dark:text-white/70 line-clamp-2 whitespace-pre-line">
+              {quotedText}
+            </p>
+            <button
+              type="button"
+              onClick={() => setQuotedText('')}
+              aria-label="Remove quote"
+              className="shrink-0 p-0.5 rounded text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white transition-colors duration-150"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <TextareaAutosize
           ref={inputRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           minRows={2}
           className="px-2 bg-transparent placeholder:text-[15px] placeholder:text-black/50 dark:placeholder:text-white/50 text-sm text-black dark:text-white resize-none focus:outline-none w-full max-h-24 lg:max-h-36 xl:max-h-48"
-          placeholder={placeholder}
+          placeholder={quotedText ? 'Ask about the selected text' : placeholder}
         />
         <div className="flex flex-row items-center justify-between mt-4">
           <Optimization />

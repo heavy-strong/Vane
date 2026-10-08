@@ -1,7 +1,7 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import React, { MutableRefObject } from 'react';
+import React, { MutableRefObject, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import {
   BookCopy,
@@ -13,6 +13,7 @@ import {
   CornerDownRight,
   Cpu,
   Clock,
+  Quote,
 } from 'lucide-react';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
@@ -31,6 +32,8 @@ import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
 import TableBlock from './MessageRenderer/TableBlock';
 import MathTex, { preprocessMath } from './MessageRenderer/MathTex';
+import SelectionPopover from './SelectionPopover';
+import { parseQuotedMessage } from '@/lib/quote';
 
 const formatDuration = (ms: number) => {
   if (ms < 1000) return `${ms}ms`;
@@ -83,6 +86,12 @@ const MessageBox = ({
 
   const hasContent = section.parsedTextBlocks.length > 0;
 
+  const answerRef = useRef<HTMLDivElement | null>(null);
+
+  const { quote, message: queryMessage } = parseQuotedMessage(
+    section.message.query,
+  );
+
   const { speechStatus, start, stop } = useSpeech({ text: speechMessage });
 
   const markdownOverrides: MarkdownToJSX.Options = {
@@ -123,8 +132,19 @@ const MessageBox = ({
   return (
     <div className="space-y-6">
       <div className={'w-full pt-8 break-words'}>
+        {quote && (
+          <div className="flex flex-row items-start gap-2 mb-3 lg:w-9/12 pl-3 border-l-2 border-light-300 dark:border-dark-300">
+            <Quote
+              size={14}
+              className="shrink-0 mt-1 text-black/40 dark:text-white/40"
+            />
+            <p className="text-sm text-black/60 dark:text-white/60 line-clamp-3 whitespace-pre-line">
+              {quote}
+            </p>
+          </div>
+        )}
         <h2 className="text-black dark:text-white font-medium text-3xl lg:w-9/12">
-          {section.message.query}
+          {queryMessage}
         </h2>
       </div>
 
@@ -208,15 +228,18 @@ const MessageBox = ({
 
             {hasContent && (
               <>
-                <Markdown
-                  className={cn(
-                    'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
-                    'max-w-none break-words text-black dark:text-white',
-                  )}
-                  options={markdownOverrides}
-                >
-                  {preprocessMath(parsedMessage)}
-                </Markdown>
+                <SelectionPopover containerRef={answerRef} />
+                <div ref={answerRef}>
+                  <Markdown
+                    className={cn(
+                      'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
+                      'max-w-none break-words text-black dark:text-white',
+                    )}
+                    options={markdownOverrides}
+                  >
+                    {preprocessMath(parsedMessage)}
+                  </Markdown>
+                </div>
 
                 {loading && isLast ? null : (
                   <div className="flex flex-row items-center justify-between w-full text-black dark:text-white py-4">
