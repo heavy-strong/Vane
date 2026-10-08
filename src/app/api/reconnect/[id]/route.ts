@@ -63,6 +63,7 @@ export const POST = async (
             JSON.stringify({
               type: 'messageEnd',
               durationMs: data?.durationMs,
+              stopped: data?.stopped === true,
             }) + '\n',
           ),
         );

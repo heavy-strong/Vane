@@ -208,6 +208,13 @@ export const POST = async (req: Request) => {
     const writer = responseStream.writable.getWriter();
     const encoder = new TextEncoder();
 
+    // Lets the client address this session, e.g. to stop it.
+    writer.write(
+      encoder.encode(
+        JSON.stringify({ type: 'session', sessionId: session.id }) + '\n',
+      ),
+    );
+
     const disconnect = session.subscribe((event: string, data: any) => {
       if (event === 'data') {
         if (data.type === 'block') {
@@ -254,6 +261,7 @@ export const POST = async (req: Request) => {
             JSON.stringify({
               type: 'messageEnd',
               durationMs: data?.durationMs,
+              stopped: data?.stopped === true,
             }) + '\n',
           ),
         );

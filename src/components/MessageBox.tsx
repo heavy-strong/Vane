@@ -177,6 +177,20 @@ const MessageBox = ({
           {section.widgets.length > 0 && <Renderer widgets={section.widgets} />}
 
           <div className="flex flex-col space-y-2">
+            {!hasContent &&
+              section.message.status === 'completed' &&
+              !(loading && isLast) && (
+                <div className="flex flex-row items-center justify-between w-full text-black dark:text-white py-2">
+                  <span className="text-sm text-black/50 dark:text-white/50">
+                    Answer stopped before any text was generated.
+                  </span>
+                  <Rewrite
+                    rewrite={rewrite}
+                    messageId={section.message.messageId}
+                  />
+                </div>
+              )}
+
             {sources.length > 0 && (
               <div className="flex flex-row items-center space-x-2">
                 <Disc3

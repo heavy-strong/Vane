@@ -71,6 +71,7 @@ type ChatContext = {
     rewrite?: boolean,
   ) => Promise<void>;
   rewrite: (messageId: string) => void;
+  stopMessage: () => void;
   setChatModelProvider: (provider: ChatModelProvider) => void;
   setChatThinkingEnabled: (enabled?: boolean) => void;
   setChatReasoningEffort: (effort?: ReasoningEffort) => void;
@@ -293,6 +294,7 @@ export const chatContext = createContext<ChatContext>({
   embeddingModelProvider: { key: '', providerId: '' },
   researchEnded: false,
   rewrite: () => {},
+  stopMessage: () => {},
   sendMessage: async () => {},
   setFileIds: () => {},
   setFiles: () => {},
@@ -516,6 +518,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const isReconnectingRef = useRef(false);
   const handledMessageEndRef = useRef<Set<string>>(new Set());
 
+  // Server session of the answer being streamed, used to stop it.
+  const activeSessionIdRef = useRef<string | null>(null);
+  // Set when stop is pressed before the server has reported the session id.
+  const stopRequestedRef = useRef(false);
+
   const checkReconnect = async () => {
     if (isReconnectingRef.current) return;
 
@@ -531,6 +538,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessageAppeared(false);
 
         isReconnectingRef.current = true;
+        activeSessionIdRef.current = lastMsg.backendId;
+        stopRequestedRef.current = false;
 
         const res = await fetch(`/api/reconnect/${lastMsg.backendId}`, {
           method: 'POST',
@@ -662,7 +671,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const messageId = message.messageId;
 
     return async (data: any) => {
+      if (data.type === 'session') {
+        activeSessionIdRef.current = data.sessionId;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? { ...msg, backendId: data.sessionId }
+              : msg,
+          ),
+        );
+        if (stopRequestedRef.current) requestStop(data.sessionId, message);
+        return;
+      }
+
       if (data.type === 'error') {
+        activeSessionIdRef.current = null;
+        stopRequestedRef.current = false;
         toast.error(data.data);
         setLoading(false);
         setMessages((prev) =>
@@ -761,6 +785,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         handledMessageEndRef.current.add(messageId);
 
+        activeSessionIdRef.current = null;
+        stopRequestedRef.current = false;
+
+        const stopped = data.stopped === true;
+
         const currentMsg = messagesRef.current.find(
           (msg) => msg.messageId === messageId,
         );
@@ -777,10 +806,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         chatHistory.current = newHistory;
 
-        notifySearchComplete(
-          message.query,
-          newHistory[newHistory.length - 1][1],
-        );
+        if (!stopped) {
+          notifySearchComplete(
+            message.query,
+            newHistory[newHistory.length - 1][1],
+          );
+        }
 
         setMessages((prev) =>
           prev.map((msg) =>
@@ -798,6 +829,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         );
 
         setLoading(false);
+
+        if (stopped) return;
 
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];
 
@@ -848,6 +881,41 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
   };
 
+  const requestStop = async (sessionId: string, message: Message) => {
+    stopRequestedRef.current = false;
+
+    try {
+      const res = await fetch(`/api/stop/${sessionId}`, { method: 'POST' });
+      // On success the stream ends with a stopped messageEnd event.
+      if (res.ok) return;
+      if (res.status !== 404) {
+        throw new Error(`Stopping failed with status code ${res.status}`);
+      }
+    } catch (err) {
+      console.error('An error occurred while stopping the answer:', err);
+      toast.error('Failed to stop the answer.');
+      return;
+    }
+
+    // The server no longer has the session, so nothing will end the stream.
+    getMessageHandler(message)({ type: 'messageEnd', stopped: true });
+  };
+
+  const stopMessage = () => {
+    if (!loading) return;
+
+    const message = messagesRef.current[messagesRef.current.length - 1];
+    if (!message || message.status !== 'answering') return;
+
+    const sessionId = activeSessionIdRef.current;
+
+    if (sessionId) {
+      requestStop(sessionId, message);
+    } else {
+      stopRequestedRef.current = true;
+    }
+  };
+
   const sendMessage: ChatContext['sendMessage'] = async (
     message,
     messageId,
@@ -863,6 +931,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
     promptForNotificationPermission();
+    activeSessionIdRef.current = null;
+    stopRequestedRef.current = false;
     setLoading(true);
     setResearchEnded(false);
     setMessageAppeared(false);
@@ -992,6 +1062,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setOptimizationMode,
         rewrite,
         sendMessage,
+        stopMessage,
         setChatModelProvider,
         chatModelProvider,
         chatThinkingEnabled,

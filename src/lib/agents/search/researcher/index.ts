@@ -57,6 +57,8 @@ class Researcher {
     ];
 
     for (let i = 0; i < maxIteration; i++) {
+      if (session.signal.aborted) break;
+
       const researcherPrompt = getResearcherPrompt(
         availableActionsDescription,
         input.config.mode,
@@ -84,6 +86,8 @@ class Researcher {
       let finalToolCalls: ToolCall[] = [];
 
       for await (const partialRes of actionStream) {
+        if (session.signal.aborted) break;
+
         if (partialRes.toolCallChunk.length > 0) {
           partialRes.toolCallChunk.forEach((tc) => {
             if (
@@ -147,7 +151,7 @@ class Researcher {
         }
       }
 
-      if (finalToolCalls.length === 0) {
+      if (session.signal.aborted || finalToolCalls.length === 0) {
         break;
       }
 

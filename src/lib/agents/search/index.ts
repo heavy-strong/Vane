@@ -58,12 +58,18 @@ class SearchAgent {
         .execute();
     }
 
-    const classification = await classify({
-      chatHistory: input.chatHistory,
-      enabledSources: input.config.sources,
-      query: input.followUp,
-      llm: input.config.llm,
-    });
+    const classification = await session.untilAborted(
+      classify({
+        chatHistory: input.chatHistory,
+        enabledSources: input.config.sources,
+        query: input.followUp,
+        llm: input.config.llm,
+      }),
+    );
+
+    if (!classification) {
+      return this.finish(session, input, startedAt);
+    }
 
     const widgetPromise = WidgetExecutor.executeAll({
       classification,
@@ -96,10 +102,15 @@ class SearchAgent {
       });
     }
 
-    const [widgetOutputs, searchResults] = await Promise.all([
-      widgetPromise,
-      searchPromise,
-    ]);
+    const researchOutputs = await session.untilAborted(
+      Promise.all([widgetPromise, searchPromise]),
+    );
+
+    if (!researchOutputs) {
+      return this.finish(session, input, startedAt);
+    }
+
+    const [widgetOutputs, searchResults] = researchOutputs;
 
     session.emit('data', {
       type: 'researchComplete',
@@ -149,6 +160,9 @@ class SearchAgent {
     let responseBlockId = '';
 
     for await (const chunk of answerStream) {
+      // Leaving the loop closes the generator, which ends the provider request.
+      if (session.signal.aborted) break;
+
       if (!responseBlockId) {
         const block: TextBlock = {
           id: crypto.randomUUID(),
@@ -178,9 +192,19 @@ class SearchAgent {
       }
     }
 
+    await this.finish(session, input, startedAt);
+  }
+
+  /* Ends the stream and saves whatever has been produced so far, which is the
+     full answer or, when the user stopped it, the partial one. */
+  private async finish(
+    session: SessionManager,
+    input: SearchAgentInput,
+    startedAt: number,
+  ) {
     const durationMs = Date.now() - startedAt;
 
-    session.emit('end', { durationMs });
+    session.emit('end', { durationMs, stopped: session.signal.aborted });
 
     await db
       .update(messages)

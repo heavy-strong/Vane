@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import Sources from './MessageInputActions/Sources';
@@ -14,7 +14,7 @@ const MessageInput = ({
   placeholder?: string;
   autoFocus?: boolean;
 }) => {
-  const { loading, sendMessage } = useChat();
+  const { loading, sendMessage, stopMessage } = useChat();
 
   const [message, setMessage] = useState('');
 
@@ -81,12 +81,26 @@ const MessageInput = ({
               <ModelSelector />
               <Attach />
             </div>
-            <button
-              disabled={message.trim().length === 0 || loading}
-              className="bg-sky-500 text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2"
-            >
-              <ArrowRight className="bg-background" size={17} />
-            </button>
+            {loading ? (
+              <button
+                type="button"
+                onClick={stopMessage}
+                aria-label="Stop answering"
+                title="Stop answering"
+                className="bg-black dark:bg-white text-white dark:text-black hover:bg-opacity-85 transition duration-100 rounded-full p-2"
+              >
+                <Square size={17} className="fill-current" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={message.trim().length === 0}
+                aria-label="Send message"
+                className="bg-sky-500 text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2"
+              >
+                <ArrowRight className="bg-background" size={17} />
+              </button>
+            )}
           </div>
         </div>
       </div>
