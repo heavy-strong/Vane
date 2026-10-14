@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { requestFollowUp } from '../followUpRequest';
 
 export type MediaStatus = 'idle' | 'loading' | 'done' | 'error';
 
@@ -24,29 +25,26 @@ export const useMediaSearch = <T>(
   };
 
   const historyRef = useRef(chatHistory);
-  historyRef.current = chatHistory;
+  useEffect(() => {
+    historyRef.current = chatHistory;
+  }, [chatHistory]);
 
   const load = useCallback(async () => {
     if (statusRef.current === 'loading' || statusRef.current === 'done') return;
     update('loading');
 
     try {
-      const res = await fetch(`/api/${kind}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await requestFollowUp<Partial<Record<typeof kind, T[]>>>(
+        `/api/${kind}`,
+        {
           query,
           chatHistory: historyRef.current,
           chatModel: {
             providerId: localStorage.getItem('chatModelProviderId'),
             key: localStorage.getItem('chatModelKey'),
           },
-        }),
-      });
-
-      if (!res.ok) throw new Error(`Request failed with ${res.status}`);
-
-      const data = await res.json();
+        },
+      );
       setItems(data[kind] ?? []);
       update('done');
     } catch (error) {

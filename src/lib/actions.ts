@@ -1,3 +1,5 @@
+import { requestFollowUp } from './followUpRequest';
+
 export const getSuggestions = async (
   chatHistory: [string, string][],
   target?: { chatId: string; messageId: string },
@@ -6,12 +8,9 @@ export const getSuggestions = async (
   const chatModelProvider = localStorage.getItem('chatModelProviderId');
 
   try {
-    const res = await fetch(`/api/suggestions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const data = await requestFollowUp<{ suggestions?: string[] }>(
+      '/api/suggestions',
+      {
         chatHistory,
         chatModel: {
           providerId: chatModelProvider,
@@ -19,12 +18,8 @@ export const getSuggestions = async (
         },
         chatId: target?.chatId,
         messageId: target?.messageId,
-      }),
-    });
-
-    if (!res.ok) return [];
-
-    const data = (await res.json()) as { suggestions?: string[] };
+      },
+    );
 
     return Array.isArray(data.suggestions) ? data.suggestions : [];
   } catch (err) {
