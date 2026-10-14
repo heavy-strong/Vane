@@ -21,6 +21,7 @@ import {
   VideoIcon,
 } from 'lucide-react';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
+import ExternalAnchor from './ExternalAnchor';
 import Copy from './MessageActions/Copy';
 import Rewrite from './MessageActions/Rewrite';
 import MessageSources from './MessageSources';
@@ -207,6 +208,9 @@ const MessageBox = ({
         return next();
       },
       overrides: {
+        a: {
+          component: ExternalAnchor,
+        },
         think: {
           component: ThinkTagProcessor,
           props: {

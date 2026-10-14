@@ -6,6 +6,7 @@ import 'yet-another-react-lightbox/styles.css';
 import { MediaStatus } from '@/lib/hooks/useMediaSearch';
 import { sourceHost } from '@/lib/utils/source';
 import MediaState from './MediaState';
+import ExternalAnchor from './ExternalAnchor';
 
 export type SearchVideo = {
   url: string;
@@ -128,12 +129,7 @@ const SearchVideos = ({
               /* No embeddable player: show the thumbnail and link out */
               return (
                 <div className="h-full w-full flex flex-col items-center justify-center space-y-4">
-                  <a
-                    href={slide.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="relative block"
-                  >
+                  <ExternalAnchor href={slide.url} className="relative block">
                     <img
                       src={slide.src}
                       alt={slide.title}
@@ -146,16 +142,14 @@ const SearchVideos = ({
                         className="text-white/90 drop-shadow"
                       />
                     </div>
-                  </a>
-                  <a
+                  </ExternalAnchor>
+                  <ExternalAnchor
                     href={slide.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="flex flex-row items-center space-x-2 rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition"
                   >
                     <span className="max-w-[70vw] truncate">{slide.title}</span>
                     <ExternalLink size={15} />
-                  </a>
+                  </ExternalAnchor>
                 </div>
               );
             }

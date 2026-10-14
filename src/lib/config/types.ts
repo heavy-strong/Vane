@@ -6,6 +6,7 @@ type BaseUIConfigField = {
   required: boolean;
   description: string;
   scope: 'client' | 'server';
+  desktopOnly?: boolean;
   env?: string;
 };
 

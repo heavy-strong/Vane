@@ -51,3 +51,6 @@ export const setDesktopShortcutRecording = (recording: boolean) =>
   isDesktop()
     ? invoke<void>('set_shortcut_recording', { recording })
     : Promise.resolve();
+
+export const openDesktopLink = (url: string, inBrowser: boolean) =>
+  invoke<void>('open_desktop_link', { url, inBrowser });

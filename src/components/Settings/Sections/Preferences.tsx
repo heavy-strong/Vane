@@ -1,5 +1,6 @@
 import { UIConfigField } from '@/lib/config/types';
 import SettingsField from '../SettingsField';
+import { isDesktop } from '@/lib/desktop';
 
 const Preferences = ({
   fields,
@@ -10,18 +11,20 @@ const Preferences = ({
 }) => {
   return (
     <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-      {fields.map((field) => (
-        <SettingsField
-          key={field.key}
-          field={field}
-          value={
-            (field.scope === 'client'
-              ? localStorage.getItem(field.key)
-              : values[field.key]) ?? field.default
-          }
-          dataAdd="preferences"
-        />
-      ))}
+      {fields
+        .filter((field) => !field.desktopOnly || isDesktop())
+        .map((field) => (
+          <SettingsField
+            key={field.key}
+            field={field}
+            value={
+              (field.scope === 'client'
+                ? localStorage.getItem(field.key)
+                : values[field.key]) ?? field.default
+            }
+            dataAdd="preferences"
+          />
+        ))}
     </div>
   );
 };

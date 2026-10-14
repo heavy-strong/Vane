@@ -5,6 +5,7 @@
  */
 export const SYNCED_PREFERENCE_KEYS = [
   'theme',
+  'openLinksInBrowser',
   'measureUnit',
   'autoMediaSearch',
   'showWeatherWidget',

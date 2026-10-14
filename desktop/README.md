@@ -5,6 +5,7 @@ A thin native shell (Tauri v2) around a self-hosted Vane instance. It adds what 
 - **Global shortcut** — press `Alt+Shift+Space` (configurable) anywhere to open a new Vane question, with the chat input focused.
 - **Tray icon** — Show/Hide, New question, Settings, Quit.
 - **Close to tray** — closing the window hides it; the shortcut keeps working.
+- **External links** — answers, citations, sources, and video links open in your default browser. Turn off **Vane Settings → Preferences → Open links in default browser** to open them in separate Vane windows while keeping your chat open. The choice is saved with your shared preferences; this setting is only shown in the desktop app.
 - **Single instance** — launching it again just focuses the existing window.
 - **Notifications** — a native notification when an answer finishes while the window is in the background (toggle in **Vane Settings → Preferences**). Clicking it brings the window back. On macOS, `npm run dev` posts notifications as Terminal, so clicks go to Terminal; use a bundled build (`npx tauri build --debug --bundles app`) to test clicking.
 
@@ -35,7 +36,7 @@ Once connected, open **Vane Settings → Keyboard shortcuts → New question** i
 
 Recording temporarily releases the global shortcut so its current combination can be recorded too. Escape, leaving the field, closing the settings, or changing windows restores it. A failed registration or save retains the previous setting and reports the error.
 
-The [Tauri capability system](https://tauri.app/security/capabilities/) grants the configured server origin access to only the shortcut read, write, and recording commands and the notification command. Full desktop configuration and core system APIs remain available only to the bundled settings page. Native commands also verify the current server origin and the IPC permission scope, so previously configured origins cannot change the current server's shortcut.
+The [Tauri capability system](https://tauri.app/security/capabilities/) grants the configured server origin access to the shortcut read, write, and recording commands, the notification command, the HTTP(S) link-opening command, and the URL opener. Full desktop configuration and core system APIs remain available only to the bundled settings page. Custom native commands also verify the current server origin and the IPC permission scope, so previously configured origins cannot use the current server's custom desktop commands. External link windows receive no desktop command permissions.
 
 | OS      | Path                                                           |
 | ------- | -------------------------------------------------------------- |

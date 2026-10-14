@@ -5,7 +5,15 @@
 //! a system-wide keyboard shortcut that summons the window, a tray icon and
 //! close-to-tray behaviour.
 
-use std::{collections::HashSet, fs, path::PathBuf, sync::Mutex};
+use std::{
+    collections::HashSet,
+    fs,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -17,10 +25,12 @@ use tauri::{
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 #[cfg(not(target_os = "macos"))]
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_opener::OpenerExt;
 
 const MAIN_WINDOW: &str = "main";
 const SETTINGS_WINDOW: &str = "settings";
 const DEFAULT_SHORTCUT: &str = "Alt+Shift+Space";
+static NEXT_LINK_WINDOW: AtomicU64 = AtomicU64::new(1);
 
 /// Focuses the chat input once the window is brought to the front so the user
 /// can start typing right away, like a launcher.
@@ -99,10 +109,12 @@ fn allow_server_shortcut_access(app: &AppHandle, url: &Url) -> tauri::Result<()>
                 scope.clone(),
                 Vec::<ServerScope>::new(),
             )
-            .permission_scoped("allow-show-notification", scope, Vec::<ServerScope>::new())
-            // Citation links come from the configured Vane server. Permit it
-            // to hand http(s) URLs to the OS default browser, but only from
-            // that server origin and only in the main window.
+            .permission_scoped(
+                "allow-show-notification",
+                scope.clone(),
+                Vec::<ServerScope>::new(),
+            )
+            .permission_scoped("allow-open-desktop-link", scope, Vec::<ServerScope>::new())
             .permission("opener:allow-open-url")
             .permission("opener:allow-default-urls"),
     )?;
@@ -497,6 +509,37 @@ fn get_settings(app: AppHandle) -> Settings {
 }
 
 #[tauri::command]
+async fn open_desktop_link(
+    app: AppHandle,
+    window: WebviewWindow,
+    scope: CommandScope<ServerScope>,
+    url: String,
+    in_browser: bool,
+) -> Result<(), String> {
+    check_server_window(&app, &window, &scope)?;
+    let url = parse_server_url(&url)?;
+    if in_browser {
+        return app
+            .opener()
+            .open_url(url.as_str(), None::<&str>)
+            .map_err(|e| e.to_string());
+    }
+
+    // A separate window keeps the active chat intact. External pages receive
+    // neither the desktop bridge nor the main/settings windows' capabilities.
+    let label = format!("link-{}", NEXT_LINK_WINDOW.fetch_add(1, Ordering::Relaxed));
+    WebviewWindowBuilder::new(&app, label, WebviewUrl::External(url))
+        .title("Vane — Link")
+        .inner_size(1100.0, 800.0)
+        .min_inner_size(640.0, 480.0)
+        .center()
+        .on_navigation(|url| matches!(url.scheme(), "http" | "https"))
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let url = parse_server_url(&settings.server_url)?;
     let normalized = Settings {
@@ -534,6 +577,7 @@ pub fn run() {
             get_desktop_shortcut,
             set_desktop_shortcut,
             set_shortcut_recording,
+            open_desktop_link,
             show_notification
         ])
         .setup(|app| {

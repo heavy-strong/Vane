@@ -42,6 +42,17 @@ class ConfigManager {
         scope: 'client',
       },
       {
+        name: 'Open links in default browser',
+        key: 'openLinksInBrowser',
+        type: 'switch',
+        required: false,
+        description:
+          'Open external links in your default browser. Turn off to open them in a separate Vane window.',
+        default: true,
+        scope: 'client',
+        desktopOnly: true,
+      },
+      {
         name: 'Measurement Unit',
         key: 'measureUnit',
         type: 'select',

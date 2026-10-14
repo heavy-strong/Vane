@@ -6,6 +6,7 @@ fn main() {
             "get_desktop_shortcut",
             "set_desktop_shortcut",
             "set_shortcut_recording",
+            "open_desktop_link",
             "show_notification",
         ]),
     ))

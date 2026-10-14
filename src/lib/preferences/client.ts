@@ -19,6 +19,7 @@ export type PreferencesChangedDetail = { keys: string[]; remote: boolean };
 const FAVORITES_CHANGED_EVENT = 'favorite-chat-models-changed';
 const CLIENT_CONFIG_KEYS: string[] = [
   'theme',
+  'openLinksInBrowser',
   'measureUnit',
   'autoMediaSearch',
   'showWeatherWidget',
