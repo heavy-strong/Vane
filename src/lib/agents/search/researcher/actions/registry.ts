@@ -1,5 +1,5 @@
-import { Tool, ToolCall } from '@/lib/models/types';
-import {
+import type { Tool, ToolCall } from '@/lib/models/types';
+import type {
   ActionExecutionConfig,
   ActionOutput,
   ClassifierOutput,
@@ -79,20 +79,17 @@ class ActionRegistry {
     actions: ToolCall[],
     additionalConfig: ActionExecutionConfig,
   ): Promise<ActionOutput[]> {
-    const results: ActionOutput[] = [];
-
-    await Promise.all(
-      actions.map(async (actionConfig) => {
-        const output = await this.execute(
+    // Preserve call order so each tool response is paired with its own ID,
+    // even when parallel searches and page reads finish in a different order.
+    return Promise.all(
+      actions.map((actionConfig) =>
+        this.execute(
           actionConfig.name,
           actionConfig.arguments,
           additionalConfig,
-        );
-        results.push(output);
-      }),
+        ),
+      ),
     );
-
-    return results;
   }
 }
 

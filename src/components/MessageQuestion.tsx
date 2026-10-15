@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Pencil, Quote } from 'lucide-react';
+import { Check, Copy, Hash, Pencil, Quote } from 'lucide-react';
 import { Message } from './ChatWindow';
 import { useChat } from '@/lib/hooks/useChat';
 import { buildQuotedMessage, parseQuotedMessage } from '@/lib/quote';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const formatTime = (date: Date | string) => {
   const d = new Date(date);
@@ -24,9 +25,17 @@ const MessageQuestion = ({ message }: { message: Message }) => {
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(queryMessage);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'question' | 'id' | null>(null);
+  const copyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!editing) return;
@@ -46,13 +55,21 @@ const MessageQuestion = ({ message }: { message: Message }) => {
     el.style.height = `${el.scrollHeight}px`;
   }, [draft, editing]);
 
-  const copy = async () => {
+  const copy = async (target: 'question' | 'id') => {
     try {
-      await navigator.clipboard.writeText(queryMessage);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(
+        target === 'id' ? message.messageId : queryMessage,
+      );
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+      setCopied(target);
+      copyTimeout.current = setTimeout(() => setCopied(null), 1500);
     } catch (err) {
-      console.error('Failed to copy question:', err);
+      console.error(`Failed to copy question ${target}:`, err);
+      toast.error(
+        target === 'id'
+          ? 'Failed to copy question ID'
+          : 'Failed to copy question',
+      );
     }
   };
 
@@ -141,12 +158,16 @@ const MessageQuestion = ({ message }: { message: Message }) => {
               )}
             >
               <button
-                onClick={copy}
+                onClick={() => copy('question')}
                 className={actionClass}
                 aria-label="Copy question"
                 title="Copy"
               >
-                {copied ? <Check size={15} /> : <Copy size={15} />}
+                {copied === 'question' ? (
+                  <Check size={15} />
+                ) : (
+                  <Copy size={15} />
+                )}
               </button>
               <button
                 onClick={startEditing}
@@ -162,11 +183,21 @@ const MessageQuestion = ({ message }: { message: Message }) => {
               {queryMessage}
             </div>
           </div>
-          {time && (
-            <span className="mt-1 mr-1 text-xs text-black/40 dark:text-white/40">
-              {time}
-            </span>
-          )}
+          <div className="mt-1 mr-1 flex items-center gap-2 text-xs text-black/40 dark:text-white/40">
+            {time && <span>{time}</span>}
+            <button
+              type="button"
+              onClick={() => copy('id')}
+              className="flex items-center gap-1 rounded px-1 py-0.5 hover:text-black dark:hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-current transition-colors"
+              aria-label="Copy question ID"
+              title={`Copy question ID: ${message.messageId}`}
+            >
+              {copied === 'id' ? <Check size={12} /> : <Hash size={12} />}
+              <span aria-live="polite">
+                {copied === 'id' ? 'Copied' : 'ID'}
+              </span>
+            </button>
+          </div>
         </div>
       )}
     </div>

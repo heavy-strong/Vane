@@ -54,9 +54,9 @@ const getSearxngDefaultEngines = async (kind: SearchKind) => {
 };
 
 /* Builds the SearXNG options (engines/language) for a query, applying the
- * user's engine selection and the Korean boost. `originalQuery` is the user's
- * own text; pass it when `query` was rewritten by an LLM (often into English)
- * so Korean detection still sees what the user typed. */
+ * user's engine selection and the Korean boost. Web research may deliberately
+ * use English to find primary sources, so use each search query's language.
+ * Media searches still use the original message to select local engines. */
 export const resolveSearchOptions = async (
   query: string,
   kind: SearchKind,
@@ -71,7 +71,8 @@ export const resolveSearchOptions = async (
 
   const korean =
     isKoreanBoostEnabled() &&
-    (containsHangul(query) || containsHangul(originalQuery ?? ''));
+    (containsHangul(query) ||
+      (kind !== 'web' && containsHangul(originalQuery ?? '')));
 
   const opts: SearxngSearchOptions = {};
 

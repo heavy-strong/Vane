@@ -1,3 +1,4 @@
+import { formatSearchContext } from '@/lib/utils/searchResults';
 import { ResearcherOutput, SearchAgentInput } from './types';
 import SessionManager from '@/lib/session';
 import { classify } from './classifier';
@@ -53,12 +54,7 @@ class APISearchAgent {
     });
 
     const finalContext =
-      searchResults?.searchFindings
-        .map(
-          (f, index) =>
-            `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
-        )
-        .join('\n') || '';
+      formatSearchContext(searchResults?.searchFindings ?? []) || '';
 
     const widgetContext = widgetOutputs
       .map((o) => {

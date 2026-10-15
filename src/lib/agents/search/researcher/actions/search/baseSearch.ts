@@ -9,6 +9,7 @@ import z from 'zod';
 import Scraper from '@/lib/scraper';
 import { splitText } from '@/lib/utils/splitText';
 import { resolveSearchOptions } from '@/lib/searchEngines';
+import { selectSearchResults } from '@/lib/utils/searchResults';
 
 /* Explicit `searchConfig` (academic/social sources) wins; otherwise apply the
  * user's web engine selection and Korean boost. */
@@ -53,9 +54,9 @@ export const executeSearch = async (input: {
     const searchResultsBlockId = crypto.randomUUID();
     let searchResultsEmitted = false;
 
-    const results: Chunk[] = [];
+    const resultGroups: Chunk[][] = input.queries.map(() => []);
 
-    const search = async (q: string) => {
+    const search = async (q: string, queryIndex: number) => {
       let res: Awaited<ReturnType<typeof searchSearxng>>;
       try {
         res = await searchSearxng(
@@ -70,40 +71,23 @@ export const executeSearch = async (input: {
       let resultChunks: Chunk[] = [];
 
       try {
+        if (res.results.length === 0) return;
         const contents = res.results.map((r) => r.content || r.title);
 
         // One request for the query and every result rather than one each.
         const [queryEmbedding, ...chunkEmbeddings] =
           await input.embedding.embedText([q, ...contents]);
 
-        const scoredChunks = res.results.map((r, i) => ({
+        resultChunks = res.results.map((r, i) => ({
           content: contents[i],
           metadata: {
             title: r.title,
             url: r.url,
+            evidence: 'search snippet',
             similarity: computeSimilarity(queryEmbedding, chunkEmbeddings[i]),
             embedding: chunkEmbeddings[i],
           },
         }));
-
-        const relevantChunks = scoredChunks.filter(
-          (c) => c.metadata.similarity > 0.5,
-        );
-
-        // The 0.5 threshold assumes query and content are embedded in a
-        // space where they're comparable - with an English-only embedding
-        // model (e.g. the default all-MiniLM-L6-v2) this silently fails for
-        // non-English queries: a Korean query against genuinely relevant
-        // English content commonly scores well under 0.5, so every result
-        // gets dropped and the assistant ends up with nothing to answer
-        // from. Rather than returning zero results in that case, fall back
-        // to the best-scoring results instead of discarding everything.
-        resultChunks =
-          relevantChunks.length > 0
-            ? relevantChunks
-            : scoredChunks
-                .sort((a, b) => b.metadata.similarity - a.metadata.similarity)
-                .slice(0, 5);
       } catch (err) {
         resultChunks = res.results.map((r) => {
           const content = r.content || r.title;
@@ -113,13 +97,14 @@ export const executeSearch = async (input: {
             metadata: {
               title: r.title,
               url: r.url,
+              evidence: 'search snippet',
               similarity: 1,
               embedding: [],
             },
           };
         });
       } finally {
-        results.push(...resultChunks);
+        resultGroups[queryIndex] = resultChunks;
       }
 
       if (!searchResultsEmitted) {
@@ -161,48 +146,7 @@ export const executeSearch = async (input: {
 
     await Promise.all(input.queries.map(search));
 
-    results.sort((a, b) => b.metadata.similarity - a.metadata.similarity);
-
-    const uniqueSearchResultIndices: Set<number> = new Set();
-
-    for (let i = 0; i < results.length; i++) {
-      let isDuplicate = false;
-
-      for (const indice of uniqueSearchResultIndices.keys()) {
-        if (
-          results[i].metadata.embedding.length === 0 ||
-          results[indice].metadata.embedding.length === 0
-        )
-          continue;
-
-        const similarity = computeSimilarity(
-          results[i].metadata.embedding,
-          results[indice].metadata.embedding,
-        );
-
-        if (similarity > 0.75) {
-          isDuplicate = true;
-          break;
-        }
-      }
-
-      if (!isDuplicate) {
-        uniqueSearchResultIndices.add(i);
-      }
-    }
-
-    const uniqueSearchResults = Array.from(uniqueSearchResultIndices.keys())
-      .map((i) => {
-        const uniqueResult = results[i];
-
-        delete uniqueResult.metadata.embedding;
-        delete uniqueResult.metadata.similarity;
-
-        return uniqueResult;
-      })
-      .slice(0, 20);
-
-    return uniqueSearchResults;
+    return selectSearchResults(resultGroups);
   } else if (input.mode === 'quality') {
     const searchResultsBlockId = crypto.randomUUID();
     let searchResultsEmitted = false;
@@ -231,6 +175,7 @@ export const executeSearch = async (input: {
           metadata: {
             title: r.title,
             url: r.url,
+            evidence: 'search snippet',
             similarity: 1,
             embedding: [],
           },
@@ -285,7 +230,7 @@ export const executeSearch = async (input: {
       ## Things to taken into consideration when picking the search results:
       1. Relevance to the query: The search results should be relevant to the query provided. Irrelevant results should be ignored.
       2. Content quality: The content of the search results should be of high quality and provide valuable information that can help in answering the question.
-      3. Favour known and reputable sources: If there are search results from known and reputable sources that are relevant to the query, those should be prioritized.
+      3. For product/feature definitions and technical claims, prioritize relevant first-party documentation and release notes over social posts, aggregators, and third-party commentary. Read the primary page even when its title is broader than the queried feature.
       4. Diversity: If there are multiple search results that are relevant and of high quality, try to pick results that provide diverse perspectives or information to get a well-rounded understanding of the topic.
       5. Avoid picking search results that are too similar to each other in terms of content to maximize the amount of information gathered.
       6. Maximum 3 results: Assistant should pick a maximum of 3 search results. If there are more than 3 relevant and high-quality search results, pick the top 3 based on the above criteria. If the queries are very specific and there are only 1 or 2 relevant search results, it's okay to pick only those 1 or 2 results.
@@ -445,7 +390,13 @@ export const executeSearch = async (input: {
 
           extractedFacts.push({
             ...result,
-            content: accumulatedContent,
+            content: accumulatedContent.trim() || result.content,
+            metadata: {
+              ...result.metadata,
+              evidence: accumulatedContent.trim()
+                ? 'page extract'
+                : 'search snippet',
+            },
           });
         } catch (err) {
           console.log(

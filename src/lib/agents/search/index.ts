@@ -1,3 +1,4 @@
+import { formatSearchContext } from '@/lib/utils/searchResults';
 import { ResearcherOutput, SearchAgentInput } from './types';
 import SessionManager from '@/lib/session';
 import { classify } from './classifier';
@@ -122,12 +123,7 @@ class SearchAgent {
       '<Query to be answered without searching; Search not made>';
 
     if (searchResults) {
-      finalContext = searchResults?.searchFindings
-        .map(
-          (f, index) =>
-            `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
-        )
-        .join('\n');
+      finalContext = formatSearchContext(searchResults?.searchFindings ?? []);
     }
 
     const widgetContext = widgetOutputs

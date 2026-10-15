@@ -14,7 +14,7 @@ class Researcher {
     let actionOutput: ActionOutput[] = [];
     let maxIteration =
       input.config.mode === 'speed'
-        ? 2
+        ? 3
         : input.config.mode === 'balanced'
           ? 6
           : 25;
@@ -155,7 +155,14 @@ class Researcher {
         break;
       }
 
-      if (finalToolCalls[finalToolCalls.length - 1].name === 'done') {
+      // A model may batch done with a search/read. Execute that evidence call
+      // before finishing instead of silently discarding the entire batch.
+      if (
+        finalToolCalls.some((tc) => tc.name === 'done') &&
+        finalToolCalls.every(
+          (tc) => tc.name === 'done' || tc.name === '__reasoning_preamble',
+        )
+      ) {
         break;
       }
 
@@ -185,6 +192,8 @@ class Researcher {
           content: JSON.stringify(action),
         });
       });
+
+      if (finalToolCalls.some((tc) => tc.name === 'done')) break;
     }
 
     const searchResults = actionOutput
@@ -204,6 +213,12 @@ class Researcher {
           const existingResult = searchResults[existingIndex];
 
           existingResult.content += `\n\n${result.content}`;
+          if (result.metadata.evidence === 'page extract') {
+            existingResult.metadata = {
+              ...existingResult.metadata,
+              ...result.metadata,
+            };
+          }
 
           return undefined;
         }

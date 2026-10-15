@@ -7,12 +7,23 @@ const actionSchema = z.object({
   type: z.literal('web_search'),
   queries: z
     .array(z.string())
-    .describe('An array of search queries to perform web searches for.'),
+    .describe(
+      "Up to 3 targeted queries. Keep one unquoted query using the user's terms. For unfamiliar product/feature names, try spelling/spacing variants and a query for official documentation, without guessing a different intent.",
+    ),
 });
+
+const queryGuidance = `
+For a product or feature definition, first establish its identity from primary sources:
+- Include an unquoted keyword query preserving the user's terms; do not put an unfamiliar multiword name in exact-match quotes in every query. Exact phrases can hide official spellings with different spacing or hyphenation.
+- Use the other queries for plausible spelling/spacing variants and official documentation or release notes. Use site: only for a known or discovered official domain; do not invent domains or URLs.
+- Search in the product's original language (often English), even if the question is Korean. Keep a local-language query when it adds useful context.
+- Do not reinterpret an unfamiliar term as a pricing plan, competing product, or unrelated feature without evidence. Establish what it is before searching comparisons.
+- Prefer relevant first-party documentation over social posts, videos, and SEO summaries. If snippets don't define the term, read a promising official URL with scrape_url. If only weak sources appear, refine the spelling or search the official domain before concluding the evidence is insufficient.
+`;
 
 const speedModePrompt = `
 Use this tool to perform web searches based on the provided queries. This is useful when you need to gather information from the web to answer the user's questions. You can provide up to 3 queries at a time. You will have to use this every single time if this is present and relevant.
-You are currently on speed mode, meaning you would only get to call this tool once. Make sure to prioritize the most important queries that are likely to get you the needed information in one go.
+You are currently on speed mode. Gather the best evidence in one search batch, then use at most one follow-up search or page-reading call if needed to establish the answer.
 
 Your queries should be very targeted and specific to the information you need, avoid broad or generic queries.
 Your queries shouldn't be sentences but rather keywords that are SEO friendly and can be used to search the web for information.
@@ -27,7 +38,7 @@ const balancedModePrompt = `
 Use this tool to perform web searches based on the provided queries. This is useful when you need to gather information from the web to answer the user's questions. You can provide up to 3 queries at a time. You will have to use this every single time if this is present and relevant.
 
 You can call this tool several times if needed to gather enough information.
-Start initially with broader queries to get an overview, then narrow down with more specific queries based on the results you receive.
+Start with targeted queries about the user's actual subject, then refine based on the evidence returned.
 
 Your queries shouldn't be sentences but rather keywords that are SEO friendly and can be used to search the web for information.
 
@@ -47,7 +58,7 @@ const qualityModePrompt = `
 Use this tool to perform web searches based on the provided queries. This is useful when you need to gather information from the web to answer the user's questions. You can provide up to 3 queries at a time. You will have to use this every single time if this is present and relevant.
 
 You have to call this tool several times to gather enough information unless the question is very simple (like greeting questions or basic facts).
-Start initially with broader queries to get an overview, then narrow down with more specific queries based on the results you receive.
+Start with targeted queries about the user's actual subject, then refine based on the evidence returned.
 Never stop before at least 5-6 iterations of searches unless the user question is very simple.
 
 Your queries shouldn't be sentences but rather keywords that are SEO friendly and can be used to search the web for information.
@@ -60,7 +71,7 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
   name: 'web_search',
   schema: actionSchema,
   getToolDescription: () =>
-    "Use this tool to perform web searches based on the provided queries. This is useful when you need to gather information from the web to answer the user's questions. You can provide up to 3 queries at a time. You will have to use this every single time if this is present and relevant.",
+    `Search the web with up to 3 targeted queries. ${queryGuidance}`,
   getDescription: (config) => {
     let prompt = '';
 
@@ -79,7 +90,7 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
         break;
     }
 
-    return prompt;
+    return `${prompt}\n${queryGuidance}`;
   },
   enabled: (config) =>
     config.sources.includes('web') &&
