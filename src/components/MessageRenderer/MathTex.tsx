@@ -2,6 +2,10 @@ import { memo, useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import {
+  isDecodeCitationUrlsEnabled,
+  safeDecodeURI,
+} from '@/lib/utils/urlDecode';
 
 const texOf = (el: Element) =>
   el.querySelector('annotation[encoding="application/x-tex"]')?.textContent ??
@@ -14,6 +18,13 @@ const cellText = (cell: Element) => {
     el.replaceWith(`$${texOf(el)}$`);
   });
   clone.querySelectorAll('button').forEach((el) => el.remove());
+  // Keep citation destinations before flattening the cell to plain text.
+  const decode = isDecodeCitationUrlsEnabled();
+  clone.querySelectorAll('a[href]').forEach((el) => {
+    const href = el.getAttribute('href') ?? '';
+    const url = (decode ? safeDecodeURI(href) : href).replace(/\|/g, '%7C');
+    el.replaceWith(`[${el.textContent ?? ''}](${url})`);
+  });
   return (clone.textContent ?? '')
     .replace(/\s+/g, ' ')
     .trim()
